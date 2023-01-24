@@ -12,4 +12,18 @@ contract Vault is Token {
     constructor(Token token_) Token("Staked Equilibrium", "sEQL", 18, 0) {
         token = token_;
     }
+
+    function deposit(uint amount) external {
+        token.transferFrom(msg.sender, address(this), amount);
+        totalSupply += amount;
+        balanceOf[msg.sender] += amount;
+
+        tryInsert(msg.sender);
+    }
+
+    function withdraw(uint amount) external {
+        balanceOf[msg.sender] -= amount;
+        totalSupply -= amount;
+        token.transfer(msg.sender, amount);
+    }
 }
