@@ -6,18 +6,15 @@ import "./IERC20.sol";
 contract ERC20 is IERC20 {
     string public name;
     string public symbol;
-    uint8 public constant decimals = 18;
+    uint8 public decimals = 18;
 
     uint public totalSupply;
     mapping(address => uint) public balanceOf;
     mapping(address => mapping(address => uint)) public allowance;
 
-    constructor(string memory _name, string memory _symbol, uint starting_supply) {
+    constructor(string memory _name, string memory _symbol) {
         name = _name;
         symbol = _symbol;
-
-        totalSupply = starting_supply;
-        balanceOf[msg.sender] += starting_supply;
     }
 
     function transfer(address recipient, uint amount) external returns (bool) {
@@ -42,6 +39,11 @@ contract ERC20 is IERC20 {
         balanceOf[recipient] += amount;
         emit Transfer(sender, recipient, amount);
         return true;
+    }
+
+    function _mint(address recipient, uint amount) internal {
+        totalSupply += amount;
+        balanceOf[recipient] += amount;
     }
 }
 

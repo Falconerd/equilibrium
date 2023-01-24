@@ -23,7 +23,7 @@ describe("Core contract", function () {
         it("Should init the EQL token", async function () {
             const { eqlCore } = await loadFixture(deployFixture);
 
-            expect(await eqlCore.eql_token()).to.equal("0xa16E02E87b7454126E5E10d957A927A7F5B5d2be");
+            expect(await eqlCore.reward_token()).to.equal("0xa16E02E87b7454126E5E10d957A927A7F5B5d2be");
         });
 
         it("Should have empty farm groups", async function () {
@@ -38,10 +38,16 @@ describe("Core contract", function () {
     describe("Usage", function () {
         it("Should deploy a farm", async function () {
             const { eqlCore } = await loadFixture(deployFixture);
-            await eqlCore.deploy("0xa16E02E87b7454126E5E10d957A927A7F5B5d2be", "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be", "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be");
+            await eqlCore.deploy_farm("0xa16E02E87b7454126E5E10d957A927A7F5B5d2be", "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be", "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be");
             const farmByPair = await eqlCore.farm_by_pair("0xa16E02E87b7454126E5E10d957A927A7F5B5d2be");
 
             expect(await eqlCore.farms(0)).to.equal(farmByPair);
+        });
+
+        it("Should emit the deploy event", async function () {
+            const { eqlCore } = await loadFixture(deployFixture);
+            await expect(eqlCore.deploy_farm("0xa16E02E87b7454126E5E10d957A927A7F5B5d2be", "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be", "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be"))
+            .to.emit(eqlCore, "FarmDeployed");
         });
     });
 });

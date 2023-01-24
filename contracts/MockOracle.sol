@@ -8,11 +8,11 @@ contract MockOracle is IOracle, Ownable {
     constructor() {
     }
 
-    function getPrices() external returns (uint, uint) {
+    function get_prices() external returns (uint, uint) {
         return (0, 0);
     }
 
-    function getBalances(uint total_supply) external returns (uint, uint) {
+    function get_balances(uint total_supply) external returns (uint, uint) {
         return (0, 0);
     }
 }

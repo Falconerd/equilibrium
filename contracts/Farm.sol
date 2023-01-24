@@ -4,21 +4,35 @@ pragma solidity 0.8.17;
 import "./IPair.sol";
 import "./IERC20.sol";
 import "./ERC20.sol";
+import "./ICore.sol";
+
+// Capabilities:
+// - deposit and withdraw from gauges.
+// - collect fees and bribes from gauges.
+// - distribute fees and bribes to farmers.
+// - keep track of tvl.
 
 contract Farm is ERC20 {
     address public immutable core;
-    address public immutable pair;
+    address public immutable staked_token;
     address public immutable gauge;
     address public immutable oracle;
+    address public immutable reward;
 
-    constructor(address _pair, address _gauge, address _oracle) ERC20("TestFarm", "TF", 0) {
-        core = msg.sender;
-        pair = _pair;
-        gauge = _gauge;
-        oracle = _oracle;
-    }
+    bool public is_disabled = false;
 
     uint internal unlocked = 1;
+
+    event Disabled(string reason);
+
+    constructor(address _staked_token, address _gauge, address _oracle) ERC20("TestFarm", "TF") {
+        core = msg.sender;
+        staked_token = _staked_token;
+        gauge = _gauge;
+        oracle = _oracle;
+        reward = ICore(msg.sender).reward_token();
+    }
+
     modifier lock() {
         require(unlocked == 1, "EquilibriumV1: Contract is locked while performing sensitive operations.");
         unlocked = 2;
@@ -26,13 +40,19 @@ contract Farm is ERC20 {
         unlocked = 1;
     }
 
-    function deposit(uint amount) external {
-        IERC20(msg.sender).approve(address(this), amount);
-        IERC20(msg.sender).transferFrom(msg.sender, gauge, amount);
-        balanceOf[msg.sender] += amount;
+    function mark_disabled(string memory reason) external {
+        is_disabled = true;
+
+        emit Disabled(reason);
     }
 
-    function withdraw(uint amount) external {
+    function deposit(uint amount) external lock {
+        require(is_disabled != true, "EquilibriumV1: This farm has disabled desposits.");
+
+        //IERC20(pair)
+    }
+
+    function withdraw(uint amount) external lock {
         //IERC20(msg.sender)
     }
 }
