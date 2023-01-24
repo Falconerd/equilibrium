@@ -34,5 +34,15 @@ describe("Core contract", function () {
             expect(await eqlCore.active_farm_c()).not.to.equal(0);
         });
     });
+
+    describe("Usage", function () {
+        it("Should deploy a farm", async function () {
+            const { eqlCore } = await loadFixture(deployFixture);
+            await eqlCore.deploy("0xa16E02E87b7454126E5E10d957A927A7F5B5d2be", "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be", "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be");
+            const farmByPair = await eqlCore.farm_by_pair("0xa16E02E87b7454126E5E10d957A927A7F5B5d2be");
+
+            expect(await eqlCore.farms(0)).to.equal(farmByPair);
+        });
+    });
 });
 
