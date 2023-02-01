@@ -4,5 +4,8 @@
     "@nomicfoundation/hardhat-toolbox": "^2.0.0",
     "hardhat": "^2.12.4",
     "hardhat-gas-reporter": "^1.0.9"
+  },
+  "scripts": {
+      "watch": "find . -regex '.*[sol|ts]' | entr npx hardhat test"
   }
 }

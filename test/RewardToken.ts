@@ -10,7 +10,7 @@ describe("RewardToken contract", function () {
         const token = await RewardToken.deploy();
         await token.deployed();
 
-        return { RewardToken, token, owner };
+        return { token, owner };
     }
 
     describe("Deployment", function () {

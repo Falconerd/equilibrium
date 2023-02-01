@@ -13,7 +13,7 @@ describe("Vault contract", function () {
         const token = await VaultToken.deploy(rewardToken.address);
         await token.deployed();
 
-        return { VaultToken, RewardToken, token, rewardToken, owner };
+        return { token, rewardToken, owner };
     }
 
     describe("Deployment", function () {

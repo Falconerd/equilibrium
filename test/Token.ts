@@ -10,7 +10,7 @@ describe("Token contract", function () {
         const token = await Token.deploy("Token", "TKN", 18, 100_000_000);
         await token.deployed();
 
-        return { Token, token, owner, addr1, addr2 };
+        return { token, owner, addr1, addr2 };
     }
 
     describe("Deployment", function () {

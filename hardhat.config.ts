@@ -6,6 +6,14 @@ const config: HardhatUserConfig = {
   solidity: "0.8.17",
   gasReporter: {
       enabled: false
+  },
+  networks: {
+      hardhat: {
+          mining: {
+              //auto: false,
+              //interval: 0,
+          }
+      }
   }
 };
 
