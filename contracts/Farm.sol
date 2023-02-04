@@ -2,30 +2,66 @@
 pragma solidity 0.8.17;
 
 import "./IERC20.sol";
+import "./IOracle.sol";
 import "./Token.sol";
 import "./Ownable.sol";
 import "hardhat/console.sol";
 
 contract Farm is Token, Ownable {
+    address public immutable core;
     IERC20 public immutable stakingToken;
     IERC20 public immutable rewardsToken;
+    IOracle public immutable oracle;
 
-    uint public duration;
-    uint public finishAt;
-    uint public updatedAt;
-    uint public rewardRate;
+    uint public totalValueLocked;
+    bool public isDisabled;
+
+    struct RewardHistory {
+        uint32 startTime;
+        uint rewardRate;
+    }
+
+    RewardHistory[] public rewardHistory;
+
+    uint32 public startTime;
+    uint32 public epoch;
+    uint32 public lastUpdateTime;
     uint public rewardPerTokenStored;
+
     mapping(address => uint) public userRewardPerTokenPaid;
     mapping(address => uint) public rewards;
 
-    constructor(address stakingToken_, address rewardsToken_) Token("Farm", "FRM", 18, 0) {
+    event Deposit(uint amount, uint totalValueLocked);
+    event Withdraw(uint amount, uint totalValueLocked);
+    event TotalValueLockedUpdated(uint price0, uint price1, uint balance0, uint balance1, uint totalValueLocked);
+
+    uint internal unlocked = 1;
+
+    constructor(address stakingToken_, address rewardsToken_, uint epoch_, address oracle_) Token("Farm", "FRM", 18, 0) {
+        if (epoch_ == 0) {
+            revert();
+        }
+
+        core = msg.sender;
         stakingToken = IERC20(stakingToken_);
         rewardsToken = IERC20(rewardsToken_);
+        epoch = uint32(epoch_ % 2**32);
+        oracle = IOracle(oracle_);
+        startTime = blockTimestamp();
+        // TODO: gauge, oracle, epoch
+        // TODO: staingToken.approve(gauge, type(uint256).max)
+    }
+
+    modifier lock() {
+        require(unlocked == 1, "Locked");
+        unlocked = 2;
+        _;
+        unlocked = 1;
     }
 
     modifier updateReward(address account) {
         rewardPerTokenStored = rewardPerToken();
-        updatedAt = lastTimeRewardApplicable();
+        lastUpdateTime = blockTimestamp();
 
         if (account != address(0)) {
             rewards[account] = earned(account);
@@ -35,34 +71,41 @@ contract Farm is Token, Ownable {
         _;
     }
 
-    function setRewardsDuration(uint duration_) external onlyOwner {
-        require(finishAt < block.timestamp, "Reward duration not finished.");
-        duration = duration_;
-    }
+    function updateTotalValueLocked() internal {
+        (uint price0, uint price1) = oracle.getPrices();
+        if (totalSupply == 0) {
+            totalValueLocked = 0;
 
-    function notifyRewardAmount(uint amount) external onlyOwner updateReward(address(0)) {
-        // TODO: Add the remaining trace amounts of rewardsToken to the next Epoch.
-        // TODO: Add an onlyOwner function to remove the trace amounts after all Epochs
-        //       have ended.
-        if (block.timestamp > finishAt) {
-            rewardRate = amount / duration;
+            emit TotalValueLockedUpdated(price0, price1, 0, 0, 0);
         } else {
-            uint remainingRewards = rewardRate * (finishAt - block.timestamp);
-            rewardRate = (remainingRewards + amount) / duration;
+            (uint balance0, uint balance1) = oracle.getBalances(totalSupply);
+
+            totalValueLocked = price0 * balance0 + price1 * balance1;
+
+            emit TotalValueLockedUpdated(price0, price1, balance0, balance1, totalValueLocked);
         }
-
-        uint balance = rewardsToken.balanceOf(address(this));
-        require(rewardRate * duration <= balance, "Provided reward too high");
-
-        finishAt = block.timestamp + duration;
-        updatedAt = block.timestamp;
     }
 
-    function stake(uint amount) external updateReward(msg.sender) {
+    function notifyEpoch(uint amount, uint32 timestamp) external {
+        require(msg.sender == core, "Not core");
+
+        rewardHistory.push(RewardHistory({
+            startTime: timestamp, rewardRate: amount / epoch
+        }));
+    }
+
+    function deposit(uint amount) external updateReward(msg.sender) {
+        require(isDisabled == false, "Disabled");
         require(amount > 0, "amount = 0");
+
         stakingToken.transferFrom(msg.sender, address(this), amount);
+        //TODO: Deposit in gauge
         balanceOf[msg.sender] += amount;
         totalSupply += amount;
+
+        updateTotalValueLocked();
+        //TODO: Core update
+        emit Deposit(amount, totalValueLocked);
     }
 
     function withdraw(uint amount) external updateReward(msg.sender) {
@@ -72,15 +115,34 @@ contract Farm is Token, Ownable {
         stakingToken.transfer(msg.sender, amount);
     }
 
-    function lastTimeRewardApplicable() public view returns (uint) {
-        return block.timestamp < finishAt ? block.timestamp : finishAt;
-    }
-
     function rewardPerToken() public view returns (uint) {
-        if (totalSupply == 0) {
-            return rewardPerTokenStored;
+        if (totalSupply == 0 || rewardHistory.length == 0) {
+            return 0;
         }
-        return rewardPerTokenStored + (rewardRate * (lastTimeRewardApplicable() - updatedAt) * 1e18) / totalSupply;
+
+        uint n = rewardPerTokenStored;
+        uint t = blockTimestamp();
+        // Prevent out of bounds read if block.timestamp is exactly on an epoch.
+        uint firstEpochIndex = (lastUpdateTime - startTime) / epoch;
+        uint lastEpochIndex = t % epoch == 0 ? (t - startTime - 1) / epoch : (t - startTime) / epoch;
+
+        // This happens because function is called twice in updateReward.
+        if (firstEpochIndex > lastEpochIndex) {
+            firstEpochIndex = lastEpochIndex;
+        }
+
+        for (uint i = firstEpochIndex; i <= lastEpochIndex; ++i) {
+            RewardHistory memory h = rewardHistory[i];
+
+            if (lastUpdateTime > h.startTime) {
+                n += h.rewardRate * (t - lastUpdateTime) * 1e18 / totalSupply;
+            } else {
+                n += h.rewardRate * (t - h.startTime) * 1e18 / totalSupply;
+                t -= (t - h.startTime);
+            }
+        }
+
+        return n;
     }
 
     function earned(address account) public view returns (uint) {
@@ -96,7 +158,7 @@ contract Farm is Token, Ownable {
         }
     }
 
-    function blockTimestamp() public view returns (uint) {
-        return block.timestamp;
+    function blockTimestamp() public view returns (uint32) {
+        return uint32(block.timestamp % 2**32);
     }
 }
