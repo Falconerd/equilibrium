@@ -52,13 +52,29 @@ describe("Farm contract", function () {
             expect(await farm.balanceOf(addr1.address)).to.equal(100);
         });
 
-        it("Should be increase the reward when staked", async function () {
-            const { farm, stakingToken, rewardsToken, addr1, addr2 } = await loadFixture(stakeTokenFixture);
+        it("Should increase the reward when staked for a period of time", async function () {
+            const { farm, stakingToken, addr1 } = await loadFixture(stakeTokenFixture);
 
-            console.log("SIX_HOURS_IN_SECONDS:", SIX_HOURS_IN_SECONDS);
             const startTime = BigNumber.from(await time.latest());
-            const endTime = startTime.add(SIX_HOURS_IN_SECONDS);
             const halfTime = startTime.add(SIX_HOURS_IN_SECONDS / 2);
+
+            await farm.notifyEpoch(1e12, startTime);
+
+            await stakingToken.connect(addr1).approve(farm.address, 100);
+            await farm.connect(addr1).deposit(100);
+            expect(await farm.balanceOf(addr1.address)).to.equal(100);
+
+            await time.increaseTo(halfTime);
+
+            expect(await farm.earned(addr1.address)).to.closeTo(1e12 / 2, 1e9);
+        });
+
+        it("Should handle multiple users in the farm", async function () {
+            const { farm, stakingToken, addr1, addr2 } = await loadFixture(stakeTokenFixture);
+
+            const startTime = BigNumber.from(await time.latest());
+            const halfTime = startTime.add(SIX_HOURS_IN_SECONDS / 2);
+            const endTime = startTime.add(SIX_HOURS_IN_SECONDS);
 
             await farm.notifyEpoch(1e12, startTime);
 
@@ -72,21 +88,46 @@ describe("Farm contract", function () {
             await farm.connect(addr2).deposit(100);
             expect(await farm.balanceOf(addr2.address)).to.equal(100);
 
-            await time.increaseTo(endTime);
+            // If time crosses into next Epoch and next Epoch hasn't started, there will be an error.
+            // TODO: Intestigate what happens when final Epoch.
+            await time.increaseTo(endTime.sub(10));
 
-            await farm.notifyEpoch(1e12, endTime.add(1));
+            expect(await farm.earned(addr1.address)).to.closeTo(1e12 * 0.75, 1e9);
+            expect(await farm.earned(addr2.address)).to.closeTo(1e12 * 0.25, 1e9);
+        });
 
-            expect(await farm.earned(addr1.address)).to.closeTo(.75e12, BigInt("100000000"));
-            expect(await farm.earned(addr2.address)).to.closeTo(.25e12, BigInt("100000000"));
+        // TODO: No equilibrium score is calculated yet.
+        it("Should give out different rewards in different epochs, based on equilibrium score", async function () {
+            console.log("Should give out different rewards in different epochs, based on equilibrium score");
+            const { farm, stakingToken, addr1 } = await loadFixture(stakeTokenFixture);
+            console.log("addr1", addr1.address);
 
-            //await farm.connect(addr1).getReward();
-            //expect(await rewardsToken.balanceOf(addr1.address)).to.closeTo(.75e12, BigInt("100000000"));
+            let startTime = BigNumber.from(await time.latest());
+            let endTime = startTime.add(SIX_HOURS_IN_SECONDS);
 
-            //await farm.notifyEpoch(1e12, SIX_HOURS_IN_SECONDS);
+            await farm.notifyEpoch(1e12, startTime);
 
-            //await time.increase(100);
-            //await farm.balanceOf(addr1.address);
-            //await time.increase(100);
+            await stakingToken.connect(addr1).approve(farm.address, 100);
+            await farm.connect(addr1).deposit(100);
+
+            // See test above for explanation.
+            await time.increaseTo(endTime.sub(10));
+
+            expect(await farm.earned(addr1.address)).to.closeTo(1e12, 1e9);
+            await farm.connect(addr1).getReward();
+
+            startTime = endTime.add(0);
+            endTime = startTime.add(SIX_HOURS_IN_SECONDS);
+
+            await farm.notifyEpoch(1e10, startTime);
+
+            // See test above.
+            await time.increaseTo(endTime.sub(10));
+
+            expect(await farm.earned(addr1.address)).to.closeTo(1e10, 1e9);
+
+            // 1009949046884
+            // 10000000000
         });
     });
 });
