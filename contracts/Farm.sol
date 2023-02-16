@@ -92,6 +92,9 @@ contract Farm is Token, Ownable {
         rewardHistory.push(RewardHistory({
             startTime: timestamp, rewardRate: amount / epoch
         }));
+
+        rewardPerTokenStored = rewardPerToken();
+        lastUpdateTime = blockTimestamp();
     }
 
     function deposit(uint amount) external updateReward(msg.sender) {
@@ -146,23 +149,13 @@ contract Farm is Token, Ownable {
     }
 
     function earned(address account) public view returns (uint) {
-        //uint r =  (balanceOf[account] * (rewardPerToken() - userRewardPerTokenPaid[account]) / 1e18) + rewards[account];
-        uint b = balanceOf[account];
-        uint rpt = rewardPerToken();
-        uint urptp = userRewardPerTokenPaid[account];
-        uint r = rewards[account];
-        console.log("balanceOf[]", b);
-        console.log("rewardPerToken()        ", rpt);
-        console.log("userRewardPerTokenPaid[]", urptp);
-        console.log("rewards[]", r);
-        return (b * (rpt - urptp) / 1e18) + r;
+        return (balanceOf[account] * (rewardPerToken() - userRewardPerTokenPaid[account]) / 1e18) + rewards[account];
     }
 
     function getReward() external updateReward(msg.sender) {
         uint reward = rewards[msg.sender];
 
         if (reward > 0) {
-            console.log("getting reward", msg.sender);
             rewards[msg.sender] = 0;
             rewardsToken.transfer(msg.sender, reward);
         }

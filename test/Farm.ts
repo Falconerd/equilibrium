@@ -90,6 +90,7 @@ describe("Farm contract", function () {
 
             // If time crosses into next Epoch and next Epoch hasn't started, there will be an error.
             // TODO: Intestigate what happens when final Epoch.
+            // TODO: What happens when a user tries to withdraw after end time and before next epoch start? Reverts?
             await time.increaseTo(endTime.sub(10));
 
             expect(await farm.earned(addr1.address)).to.closeTo(1e12 * 0.75, 1e9);
@@ -98,9 +99,7 @@ describe("Farm contract", function () {
 
         // TODO: No equilibrium score is calculated yet.
         it("Should give out different rewards in different epochs, based on equilibrium score", async function () {
-            console.log("Should give out different rewards in different epochs, based on equilibrium score");
             const { farm, stakingToken, addr1 } = await loadFixture(stakeTokenFixture);
-            console.log("addr1", addr1.address);
 
             let startTime = BigNumber.from(await time.latest());
             let endTime = startTime.add(SIX_HOURS_IN_SECONDS);
@@ -116,6 +115,7 @@ describe("Farm contract", function () {
             expect(await farm.earned(addr1.address)).to.closeTo(1e12, 1e9);
             await farm.connect(addr1).getReward();
 
+            await time.increaseTo(endTime);
             startTime = endTime.add(0);
             endTime = startTime.add(SIX_HOURS_IN_SECONDS);
 
@@ -125,9 +125,6 @@ describe("Farm contract", function () {
             await time.increaseTo(endTime.sub(10));
 
             expect(await farm.earned(addr1.address)).to.closeTo(1e10, 1e9);
-
-            // 1009949046884
-            // 10000000000
         });
     });
 });
