@@ -97,7 +97,7 @@ contract Farm is Token, Ownable {
         lastUpdateTime = blockTimestamp();
     }
 
-    function deposit(uint amount) external updateReward(msg.sender) {
+    function deposit(uint amount) external lock updateReward(msg.sender) {
         require(isDisabled == false, "Disabled");
         require(amount > 0, "amount = 0");
 
@@ -111,7 +111,7 @@ contract Farm is Token, Ownable {
         emit Deposit(amount, totalValueLocked);
     }
 
-    function withdraw(uint amount) external updateReward(msg.sender) {
+    function withdraw(uint amount) external lock updateReward(msg.sender) {
         require(amount > 0, "amount = 0");
         balanceOf[msg.sender] -= amount;
         totalSupply -= amount;
@@ -152,7 +152,7 @@ contract Farm is Token, Ownable {
         return (balanceOf[account] * (rewardPerToken() - userRewardPerTokenPaid[account]) / 1e18) + rewards[account];
     }
 
-    function getReward() external updateReward(msg.sender) {
+    function getReward() external lock updateReward(msg.sender) {
         uint reward = rewards[msg.sender];
 
         if (reward > 0) {
