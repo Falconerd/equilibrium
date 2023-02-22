@@ -48,5 +48,36 @@ describe("Token contract", function () {
             await expect(token.connect(addr1).transfer(owner.address, 1)).to.be.reverted;
             expect(await token.balanceOf(owner.address)).to.equal(initialOwnerBalance);
         });
+
+        it("Should not allow account to use transferFrom with no allowance", async function () {
+            const { token, owner, addr1, addr2 } = await loadFixture(deployTokenFixture);
+
+            await expect(token.connect(addr2).transferFrom(owner.address, addr1.address, 1)).to.be.reverted;
+        });
+
+        it("Should not allow sender with no tokens to transferFrom", async function () {
+            const { token, owner, addr1 } = await loadFixture(deployTokenFixture);
+
+            await expect(token.transferFrom(addr1.address, owner.address, 1)).to.be.reverted;
+        });
+
+        it("Should allow another account to use transferFrom", async function () {
+            const { token, owner, addr1, addr2 } = await loadFixture(deployTokenFixture);
+
+            console.log(await token.balanceOf(owner.address));
+            console.log(await token.balanceOf(addr1.address));
+            console.log(await token.balanceOf(addr2.address));
+
+            await token.approve(addr2.address, 1000);
+            await token.connect(addr2).approve(owner.address, 1000);
+
+            console.log(await token.allowance(owner.address, addr2.address));
+            console.log(await token.allowance(addr2.address, owner.address));
+            await token.connect(addr2).transferFrom(owner.address, addr1.address, 100);
+
+            //expect(await token.balanceOf(addr1.address)).to.equal(1000);
+            //expect(await token.balanceOf(owner.address)).to.equal(900);
+            //expect(await token.balanceOf(addr2.address)).to.equal(0);
+        });
     });
 });

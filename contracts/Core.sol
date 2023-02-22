@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "./Ownable.sol";
 import "./Farm.sol";
+import "hardhat/console.sol";
 
 contract Core is Ownable {
     uint32 public constant PERIOD = 30 minutes;
@@ -20,12 +21,23 @@ contract Core is Ownable {
     int public accumulatedScore;
     int[] public observations;
 
+    // TODO: Delete these.
+    int public _delta0;
+    int public _delta1;
+    int public _delta2;
+    int public _delta3;
+
     event UpdateScore(int value, int accumulatedScore, int score, int d0, int d1, int d2, int d3);
 
     constructor() {
     }
 
+    // TODO: Remove this function.
     function setActiveFarms(Farm farm0_, Farm farm1_, Farm farm2_, Farm farm3_) public {
+        farm0 = farm0_;
+        farm1 = farm1_;
+        farm2 = farm2_;
+        farm3 = farm3_;
     }
 
     function update() public {
@@ -38,6 +50,7 @@ contract Core is Ownable {
 
         if (timestamp - lastTimestamp >= PERIOD) {
             lastTimestamp = timestamp;
+
 
             int tvl0 = int(farm0.totalValueLocked());
             int tvl1 = int(farm1.totalValueLocked());
@@ -55,6 +68,11 @@ contract Core is Ownable {
             delta1 = (delta1 >> 255 | 1) * delta1;
             delta2 = (delta2 >> 255 | 1) * delta2;
             delta3 = (delta3 >> 255 | 1) * delta3;
+
+            _delta0 = delta0;
+            _delta1 = delta1;
+            _delta2 = delta2;
+            _delta3 = delta3;
 
             int value;
 

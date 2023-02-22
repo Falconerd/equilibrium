@@ -2,6 +2,7 @@
 pragma solidity 0.8.17;
 
 import "./IERC20.sol";
+import "hardhat/console.sol";
 
 // Basic ERC20 with additional data for migration.
 
@@ -47,6 +48,7 @@ contract Token is IERC20 {
     }
 
     function transfer(address recipient, uint amount) external returns (bool) {
+        require(balanceOf[msg.sender] >= amount, "Not enough balance");
         return internalTransfer(msg.sender, recipient, amount);
     }
 
@@ -57,6 +59,7 @@ contract Token is IERC20 {
     }
 
     function transferFrom(address sender, address recipient, uint amount) external returns (bool) {
+        require(allowance[sender][msg.sender] >= amount, "Not enough allowance");
         allowance[sender][msg.sender] -= amount;
         return internalTransfer(sender, recipient, amount);
     }
