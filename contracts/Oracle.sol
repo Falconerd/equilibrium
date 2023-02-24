@@ -5,11 +5,11 @@ import "./IOracle.sol";
 
 contract Oracle is IOracle {
     function getPrices() external view returns (uint, uint) {
-        return (0, 0);
+        return (3e6, 3e6);
     }
 
     function getBalances(uint amount) external view returns (uint, uint) {
-        return (0, 0);
+        return (amount, amount);
     }
 }
 

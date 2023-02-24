@@ -4,14 +4,13 @@ import { ethers } from "hardhat";
 import { BigNumber } from "ethers";
 
 const SIX_HOURS_IN_SECONDS = 60 * 60 * 6;
-const ONE_WEEK_IN_SECONDS = BigNumber.from(7 * 24 * 60 * 60);
-const HALF_ONE_WEEK_IN_SECONDS = ONE_WEEK_IN_SECONDS.div(2);
 
 describe("Farm contract", function () {
     async function deployFarmFixture() {
         const Token = await ethers.getContractFactory("Token");
         const Farm = await ethers.getContractFactory("Farm");
         const Oracle = await ethers.getContractFactory("Oracle");
+        const Core = await ethers.getContractFactory("Core");
         const [owner, addr1, addr2] = await ethers.getSigners();
 
         const stakingToken = await Token.deploy("ETH", "ETH", 18, 1000);
@@ -21,8 +20,11 @@ describe("Farm contract", function () {
         await rewardsToken.deployed();
         await oracle.deployed();
 
-        const farm = await Farm.deploy(stakingToken.address, rewardsToken.address, SIX_HOURS_IN_SECONDS, oracle.address);
-        await farm.deployed();
+        const core = await Core.deploy();
+        await core.deployed();
+
+        const [farmAddress] = await core.deployFarm(stakingToken.address, rewardsToken.address, SIX_HOURS_IN_SECONDS, oracle.address);
+        const farm = ethers.getContractAt("Farm", farmAddress);
 
         return { farm, stakingToken, rewardsToken, owner, addr1, addr2 };
     }

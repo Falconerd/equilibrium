@@ -1,14 +1,15 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier UNLICENSED
 pragma solidity 0.8.17;
 
 import "./IERC20.sol";
 import "./IOracle.sol";
 import "./Token.sol";
 import "./Ownable.sol";
-import "hardhat/console.sol";
+import "./Core.sol";
+//import "hardhat/console.sol";
 
 contract Farm is Token, Ownable {
-    address public immutable core;
+    Core public immutable core;
     IERC20 public immutable stakingToken;
     IERC20 public immutable rewardsToken;
     IOracle public immutable oracle;
@@ -42,7 +43,8 @@ contract Farm is Token, Ownable {
             revert();
         }
 
-        core = msg.sender;
+        // This doesn't work in tests unless we use core to deploy the farms.
+        core = Core(msg.sender);
         stakingToken = IERC20(stakingToken_);
         rewardsToken = IERC20(rewardsToken_);
         epoch = uint32(epoch_ % 2**32);
@@ -87,7 +89,7 @@ contract Farm is Token, Ownable {
     }
 
     function notifyEpoch(uint amount, uint32 timestamp) external {
-        require(msg.sender == core, "Not core");
+        require(msg.sender == address(core), "Not core");
 
         rewardHistory.push(RewardHistory({
             startTime: timestamp, rewardRate: amount / epoch
@@ -102,12 +104,15 @@ contract Farm is Token, Ownable {
         require(amount > 0, "amount = 0");
 
         stakingToken.transferFrom(msg.sender, address(this), amount);
-        //TODO: Deposit in gauge
+        // TODO: Deposit in gauge
         balanceOf[msg.sender] += amount;
         totalSupply += amount;
 
         updateTotalValueLocked();
-        //TODO: Core update
+        // TODO: Core update is causing transaction revert. "function call to a non-contract account"
+        if (address(core) != address(0)) {
+            core.update();
+        }
         emit Deposit(amount, totalValueLocked);
     }
 

@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "./Ownable.sol";
 import "./Farm.sol";
+import "./Token.sol";
 import "hardhat/console.sol";
 
 contract Core is Ownable {
@@ -15,24 +16,33 @@ contract Core is Ownable {
     Farm public farm2;
     Farm public farm3;
 
+    Farm[] public farms;
+
+    Token immutable rewardsToken;
+
     // Equilibrium Score.
     uint32 public lastTimestamp;
     int public score;
     int public accumulatedScore;
     int[] public observations;
 
-    // TODO: Delete these.
-    int public _delta0;
-    int public _delta1;
-    int public _delta2;
-    int public _delta3;
-
     event UpdateScore(int value, int accumulatedScore, int score, int d0, int d1, int d2, int d3);
 
     constructor() {
+        rewardsToken = new Token("Equilibrium", "EQL", 18, 0);
     }
 
-    // TODO: Remove this function.
+    // TODO: Gauge
+    // TODO: concrete types
+    function deployFarm(address stakingToken, address oracle) public onlyOwner returns (address) {
+        Farm farm = new Farm(stakingToken, address(rewardsToken), EPOCH, oracle);
+        return address(farm);
+    }
+
+    function depositIntoFarm(address farmAddress, uint amount) public {
+    }
+
+    // todo: remove this function.
     function setActiveFarms(Farm farm0_, Farm farm1_, Farm farm2_, Farm farm3_) public {
         farm0 = farm0_;
         farm1 = farm1_;
@@ -41,10 +51,11 @@ contract Core is Ownable {
     }
 
     function update() public {
-        require(farm0 != Farm(address(0)), "farm0 not deployed");
-        require(farm1 != Farm(address(0)), "farm1 not deployed");
-        require(farm2 != Farm(address(0)), "farm2 not deployed");
-        require(farm3 != Farm(address(0)), "farm3 not deployed");
+        // TODO: Enable these
+        //require(farm0 != Farm(address(0)), "farm0 not deployed");
+        //require(farm1 != Farm(address(0)), "farm1 not deployed");
+        //require(farm2 != Farm(address(0)), "farm2 not deployed");
+        //require(farm3 != Farm(address(0)), "farm3 not deployed");
 
         uint32 timestamp = currentTimestamp();
 
@@ -59,20 +70,10 @@ contract Core is Ownable {
 
             int average = (tvl0 + tvl1 + tvl2 + tvl3) / 4;
 
-            int delta0 = average - tvl0;
-            int delta1 = average - tvl1;
-            int delta2 = average - tvl2;
-            int delta3 = average - tvl3;
-
-            delta0 = (delta0 >> 255 | 1) * delta0;
-            delta1 = (delta1 >> 255 | 1) * delta1;
-            delta2 = (delta2 >> 255 | 1) * delta2;
-            delta3 = (delta3 >> 255 | 1) * delta3;
-
-            _delta0 = delta0;
-            _delta1 = delta1;
-            _delta2 = delta2;
-            _delta3 = delta3;
+            int delta0 = abs(average - tvl0);
+            int delta1 = abs(average - tvl1);
+            int delta2 = abs(average - tvl2);
+            int delta3 = abs(average - tvl3);
 
             int value;
 
@@ -102,5 +103,13 @@ contract Core is Ownable {
 
     function currentTimestamp() public returns (uint32) {
         return uint32(block.timestamp % 2**32);
+    }
+
+    function getObservationsLength() public view returns (uint) {
+        return observations.length;
+    }
+
+    function abs(int x) private pure returns (int) {
+        return x >= 0 ? x : -x;
     }
 }
