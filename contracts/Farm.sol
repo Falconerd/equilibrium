@@ -3,12 +3,10 @@ pragma solidity 0.8.17;
 
 import "./IERC20.sol";
 import "./IOracle.sol";
-import "./Token.sol";
-import "./Ownable.sol";
 import "./Core.sol";
 //import "hardhat/console.sol";
 
-contract Farm is Token, Ownable {
+contract Farm {
     Core public immutable core;
     IERC20 public immutable stakingToken;
     IERC20 public immutable rewardsToken;
@@ -99,13 +97,13 @@ contract Farm is Token, Ownable {
         lastUpdateTime = blockTimestamp();
     }
 
-    function deposit(uint amount) external lock updateReward(msg.sender) {
+    function depositFor(address account, uint amount) external onlyOwner lock updateReward(account) {
         require(isDisabled == false, "Disabled");
         require(amount > 0, "amount = 0");
 
-        stakingToken.transferFrom(msg.sender, address(this), amount);
+        stakingToken.transferFrom(account, address(this), amount);
         // TODO: Deposit in gauge
-        balanceOf[msg.sender] += amount;
+        balanceOf[account] += amount;
         totalSupply += amount;
 
         updateTotalValueLocked();
@@ -116,11 +114,11 @@ contract Farm is Token, Ownable {
         emit Deposit(amount, totalValueLocked);
     }
 
-    function withdraw(uint amount) external lock updateReward(msg.sender) {
+    function withdrawFor(address account, uint amount) external onlyOwner lock updateReward(account) {
         require(amount > 0, "amount = 0");
-        balanceOf[msg.sender] -= amount;
+        balanceOf[account] -= amount;
         totalSupply -= amount;
-        stakingToken.transfer(msg.sender, amount);
+        stakingToken.transfer(account, amount);
     }
 
     function rewardPerToken() public view returns (uint) {
@@ -170,3 +168,4 @@ contract Farm is Token, Ownable {
         return uint32(block.timestamp % 2**32);
     }
 }
+

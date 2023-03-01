@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "./Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./Farm.sol";
-import "./Token.sol";
 import "hardhat/console.sol";
 
 contract Core is Ownable {
@@ -16,9 +16,10 @@ contract Core is Ownable {
     Farm public farm2;
     Farm public farm3;
 
-    Farm[] public farms;
+    Farm[] public allFarms;
+    mapping(address => address) farmAddressByDepositedTokenAddress;
 
-    Token immutable rewardsToken;
+    ERC20 immutable rewardsToken;
 
     // Equilibrium Score.
     uint32 public lastTimestamp;
@@ -29,17 +30,19 @@ contract Core is Ownable {
     event UpdateScore(int value, int accumulatedScore, int score, int d0, int d1, int d2, int d3);
 
     constructor() {
-        rewardsToken = new Token("Equilibrium", "EQL", 18, 0);
+        rewardsToken = new Token();
     }
 
     // TODO: Gauge
     // TODO: concrete types
     function deployFarm(address stakingToken, address oracle) public onlyOwner returns (address) {
-        Farm farm = new Farm(stakingToken, address(rewardsToken), EPOCH, oracle);
-        return address(farm);
+        address farmAddress = address(new Farm(stakingToken, address(rewardsToken), EPOCH, oracle));
+        farmAddressByDepositedTokenAddress[stakingToken] = farmAddress;
+        return farmAddress;
     }
 
-    function depositIntoFarm(address farmAddress, uint amount) public {
+    function depositIntoFarm(address stakingToken, uint amount) public nonReentrant {
+        require(farmAddressByDepositedTokenAddress[stakingToken] != address(0), "Farm does not exist");
     }
 
     // todo: remove this function.
@@ -113,3 +116,4 @@ contract Core is Ownable {
         return x >= 0 ? x : -x;
     }
 }
+
