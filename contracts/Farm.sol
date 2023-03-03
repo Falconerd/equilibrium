@@ -6,7 +6,7 @@ import "./IOracle.sol";
 import "./Core.sol";
 //import "hardhat/console.sol";
 
-contract Farm {
+contract Farm is ERC20 {
     Core public immutable core;
     IERC20 public immutable stakingToken;
     IERC20 public immutable rewardsToken;
