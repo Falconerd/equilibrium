@@ -37,7 +37,7 @@ contract Core is Ownable {
     }
 
     function deploy(address depositToken, address oracle, address masterChef, uint spookyPoolId) public onlyOwner returns (address) {
-        Farm farm = new Farm(IERC20(depositToken), eqlToken, IOracle(oracle), EPOCH, IMCV2(masterChef), spookyPoolId);
+        Farm farm = new Farm(IERC20(depositToken), IOracle(oracle), EPOCH, IMCV2(masterChef), spookyPoolId);
         farmIdByDepositToken[depositToken] = farms.length;
         farmIdByAddress[address(farm)] = farms.length;
         farms.push(farm);
