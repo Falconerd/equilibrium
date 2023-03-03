@@ -26,13 +26,11 @@ contract Farm is IFarm, ERC20, Ownable, Pausable {
 
     uint public totalValueLocked;
 
-    // Time contract was launched.
-    uint public startTime;
-    // Last time rewards were updated.
+    uint public contractDeployTime;
     uint public lastRewardsUpdateTime;
-    // Next epoch time.
     uint public nextEpochTime;
 
+    // Keep track of rewards for each token per epoch.
     struct RewardHistory {
         uint timestamp;
         uint rewardRate;
@@ -112,8 +110,8 @@ contract Farm is IFarm, ERC20, Ownable, Pausable {
         uint n = rewardPerTokenStored[rewardsToken];
         uint time = block.timestamp;
         // Prevent out of bounds read if block.timestamp is exactly on an epoch.
-        uint firstEpochIndex = (lastRewardsUpdateTime - startTime) / epoch;
-        uint lastEpochIndex = time % epoch == 0 ? (time - startTime - 1) / epoch : (time - startTime) / epoch;
+        uint firstEpochIndex = (lastRewardsUpdateTime - contractDeployTime) / epoch;
+        uint lastEpochIndex = time % epoch == 0 ? (time - contractDeployTime - 1) / epoch : (time - contractDeployTime) / epoch;
 
         if (firstEpochIndex > lastEpochIndex) {
             firstEpochIndex = lastEpochIndex;
@@ -125,7 +123,7 @@ contract Farm is IFarm, ERC20, Ownable, Pausable {
             if (lastRewardsUpdateTime > h.timestamp) {
                 n += h.rewardRate * (time - lastRewardsUpdateTime) * 1e18 / totalSupply();
             } else {
-                n += h.rewardRate * (time - startTime) * 1e18 / totalSupply();
+                n += h.rewardRate * (time - contractDeployTime) * 1e18 / totalSupply();
                 time -= (time - h.timestamp);
             }
         }
@@ -148,7 +146,7 @@ contract Farm is IFarm, ERC20, Ownable, Pausable {
 
         depositToken.transferFrom(msg.sender, address(this), amount);
         // When this function is called, any pending BOO will be transferred to this contract.
-        // TODO: Transfer the BOO straight to the BOO distributor.
+        // TODO: Transfer the BOO et al straight to the BOO et al distributor.
         masterChef.deposit(spookyPoolId, amount);
         _mint(msg.sender, amount);
 
