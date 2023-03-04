@@ -125,9 +125,9 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
             RewardHistory memory h = rewardHistory[rewardsToken][i];
 
             if (lastRewardsUpdateTime > h.timestamp) {
-                n += h.rewardRate * (time - lastRewardsUpdateTime) * 1e18 / totalSupply();
+                n += h.rewardRate * (lastTimeRewardApplicable() - lastRewardsUpdateTime) * 1e18 / totalSupply();
             } else {
-                n += h.rewardRate * (time - contractDeployTime) * 1e18 / totalSupply();
+                n += h.rewardRate * (lastTimeRewardApplicable() - contractDeployTime) * 1e18 / totalSupply();
                 time -= (time - h.timestamp);
             }
         }
@@ -189,7 +189,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
 
             rewardHistory[token].push(RewardHistory({
                 timestamp: time,
-                rewardRate: IERC20(token).balanceOf(distributor)
+                rewardRate: IERC20(token).balanceOf(distributor) / period
             }));
             rewardPerTokenStored[token] = rewardPerToken(token);
 
