@@ -17,23 +17,20 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     uint   public immutable period;
     IERC20 public immutable depositToken;
 
+    event Log(uint, uint);
+
     uint public contractDeployTime;
     uint public lastRewardsUpdateTime;
     uint public nextPeriodTime;
 
+    // Keep track of rewards for each token.
     IERC20[] public rewardTokens;
 
-    // Keep track of rewards for each token per period.
-    struct RewardHistory {
-        uint timestamp;
-        uint rewardRate;
-    }
-
     // Reward Token => Value.
-    // Use the getRewardHistory function.
-    mapping(address => RewardHistory[]) private rewardHistory;
+    mapping(address => uint) public rewardRate;
+    mapping(address => uint) public lastUpdateTime;
     mapping(address => uint) public rewardPerTokenStored;
-    mapping(address => address) public rewardsDistributorByRewardsToken;
+    mapping(address => address) public rewardsDistributor;
 
     // User => Reward Token => Amount.
     mapping(address => mapping(address => uint)) public userRewardPerTokenPaid;
@@ -55,13 +52,12 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         for (uint i = 0; i < rewardTokens.length; ++i) {
             address token = address(rewardTokens[i]);
             rewardPerTokenStored[token] = rewardPerToken(token);
+            lastUpdateTime[token] = lastTimeRewardApplicable();
             if (user != address(0)) {
                 rewards[user][token] = earned(user, token);
                 userRewardPerTokenPaid[user][token] = rewardPerTokenStored[token];
             }
         }
-
-        lastRewardsUpdateTime = lastTimeRewardApplicable();
         _;
     }
 
@@ -79,61 +75,29 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     }
 
     function addReward(address rewardsToken_, address rewardsDistributor_) public onlyOwner {
-        require(rewardsDistributorByRewardsToken[rewardsToken_] == address(0));
+        require(rewardsDistributor[rewardsToken_] == address(0));
         rewardTokens.push(IERC20(rewardsToken_));
-        rewardsDistributorByRewardsToken[rewardsToken_] = rewardsDistributor_;
+        rewardsDistributor[rewardsToken_] = rewardsDistributor_;
     }
 
     /* =============== VIEWS ================ */
-
-    function getRewardHistory(address token, uint index) external view returns (RewardHistory memory) {
-        RewardHistory[] storage history = rewardHistory[token];
-        require(index < history.length, "Out of bounds index");
-        return history[index];
-    }
 
     function rewardTokensLength() external view returns (uint) {
         return rewardTokens.length;
     }
 
     function lastTimeRewardApplicable() public view returns (uint) {
-        if (nextPeriodTime == 0) {
-            return 0;
-        } else {
-            return _min(nextPeriodTime - period, block.timestamp);
-        }
+        return _min(block.timestamp, nextPeriodTime);
     }
 
     function rewardPerToken(address rewardsToken) public view returns (uint) {
-        if (totalSupply() == 0 || rewardHistory[rewardsToken].length == 0) {
-            return (0);
+        if (totalSupply() == 0) {
+            return rewardPerTokenStored[rewardsToken];
         }
 
-        uint n = rewardPerTokenStored[rewardsToken];
-        uint time = block.timestamp;
-        // Prevent out of bounds read if block.timestamp is exactly on an period.
-        uint firstPeriodIndex = (lastRewardsUpdateTime - contractDeployTime) / period;
-        uint lastPeriodIndex;
-        if (rewardHistory[rewardsToken].length > 1) {
-            lastPeriodIndex = time % period == 0 ? (time - contractDeployTime - 1) / period : (time - contractDeployTime) / period;
-        }
-
-        if (firstPeriodIndex > lastPeriodIndex) {
-            firstPeriodIndex = lastPeriodIndex;
-        }
-
-        for (uint i = firstPeriodIndex; i <= lastPeriodIndex; ++i) {
-            RewardHistory memory h = rewardHistory[rewardsToken][i];
-
-            if (lastRewardsUpdateTime > h.timestamp) {
-                n += h.rewardRate * (lastTimeRewardApplicable() - lastRewardsUpdateTime) * 1e18 / totalSupply();
-            } else {
-                n += h.rewardRate * (lastTimeRewardApplicable() - contractDeployTime) * 1e18 / totalSupply();
-                time -= (time - h.timestamp);
-            }
-        }
-
-        return n;
+        return rewardPerTokenStored[rewardsToken] + (
+            ((lastTimeRewardApplicable() - lastUpdateTime[rewardsToken]) * rewardRate[rewardsToken] * 1e18) / totalSupply()
+        );
     }
 
     function earned(address user, address rewardsToken) public view returns (uint) {
@@ -165,44 +129,42 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         }
     }
 
-    function touch() external updateReward(msg.sender) {}
-
     /* ================ RESTRICTED FUNCTIONS ================ */
 
-    function setRewardsDistributor(address rewardsToken, address rewardsDistributor) external onlyOwner {
-        rewardsDistributorByRewardsToken[rewardsToken] = rewardsDistributor;
+    function setRewardsDistributor(address rewardsToken, address rewardsDistributor_) external onlyOwner {
+        rewardsDistributor[rewardsToken] = rewardsDistributor_;
     }
 
     function setPeriodStarter(address account) external onlyOwner {
         _periodStarter = account;
     }
 
-    function startNextPeriod() external updateReward(address(0)) {
+    function notifyRewardAmounts(address[] calldata rewardsTokens, uint[] calldata amounts) external updateReward(address(0)) {
         require(msg.sender == _periodStarter);
+        require(rewardsTokens.length == amounts.length);
 
-        uint time = block.timestamp;
+        for (uint i = 0; i < rewardsTokens.length; ++i) {
+            address token = rewardsTokens[i];
+            uint amount = amounts[i];
 
-        require(time >= nextPeriodTime, "Period has not yet finished");
+            IERC20(token).transferFrom(rewardsDistributor[token], address(this), amount);
+            if (block.timestamp >= nextPeriodTime) {
+                rewardRate[token] = amount / period;
+            } else {
+                uint remainingTime = nextPeriodTime - block.timestamp;
+                uint remainingTokens = remainingTime * rewardRate[token];
+                rewardRate[token] = (amount + remainingTokens) / period;
+            }
 
-        for (uint i = 0; i < rewardTokens.length; ++i) {
-            address token = address(rewardTokens[i]);
-            address distributor = rewardsDistributorByRewardsToken[token];
-
-            rewardHistory[token].push(RewardHistory({
-                timestamp: time,
-                rewardRate: IERC20(token).balanceOf(distributor) / period
-            }));
-            rewardPerTokenStored[token] = rewardPerToken(token);
-
-            // Always transfer all tokens from distributor.
-            IERC20(token).transferFrom(distributor, address(this), IERC20(token).balanceOf(distributor));
+            lastUpdateTime[token] = block.timestamp;
         }
 
-        nextPeriodTime = time + period;
+        nextPeriodTime = block.timestamp + period;
+        lastRewardsUpdateTime = block.timestamp;
     }
 
     function withdrawTokens(address token) external onlyOwner {
-        require(rewardsDistributorByRewardsToken[token] == address(0), "Cannot withdaw Reward Tokens");
+        require(rewardsDistributor[token] == address(0), "Cannot withdaw Reward Tokens");
         require(token != address(depositToken), "Cannot withdaw Deposit Token");
         IERC20(token).transfer(owner(), IERC20(token).balanceOf(address(this)));
     }
