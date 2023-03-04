@@ -125,6 +125,25 @@ contract FixedPeriodMultiRewardsTest is Test {
         assertEq(timestamp + 6 hours, fixedPeriodMultiRewards.nextPeriodTime());
     }
 
+    function test_RewardPerToken() public {
+        uint timestamp = startTimestamp + 69420;
+        vm.warp(timestamp);
+
+        fixture_SetupRewards();
+        fixture_StartNextPeriod();
+
+        IERC20(depositToken).approve(address(fixedPeriodMultiRewards), 100);
+        fixedPeriodMultiRewards.deposit(100);
+
+        FixedPeriodMultiRewards.RewardHistory memory historyA = fixedPeriodMultiRewards.getRewardHistory(rewardTokenA, 0);
+        assertEq(4, historyA.rewardRate);
+
+        vm.warp(timestamp + 60);
+
+        assertEq(123, fixedPeriodMultiRewards.earned(address(this), rewardTokenA));
+        assertEq(123, fixedPeriodMultiRewards.rewardPerToken(rewardTokenA));
+    }
+
     //function test_SingleUserGetReward() public {
     //    uint timestamp = startTimestamp + 69420;
     //    vm.warp(timestamp);
@@ -137,9 +156,13 @@ contract FixedPeriodMultiRewardsTest is Test {
 
     //    vm.warp(timestamp + 3 hours);
 
-    //    fixedPeriodMultiRewards.touch();
+    //    //fixedPeriodMultiRewards.getReward();
 
-    //    assertEq(42, fixedPeriodMultiRewards.rewardPerToken(rewardTokenA));
+    //    //uint x = 4 * 3 hours;
+    //    //assertEq(32, x);
+
+    //    assertEq(42, fixedPeriodMultiRewards.earned(address(this), rewardTokenA));
+
     //    //assertEq(42, fixedPeriodMultiRewards.earned(address(this), rewardTokenA));
     //}
 
