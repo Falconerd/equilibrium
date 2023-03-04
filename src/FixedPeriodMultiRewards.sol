@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import "openzeppelin-contracts/contracts/security/Pausable.sol";
 
 // Modified MultiRewards contract to use a fixed-time period.
 // - Reward Tokens require a Distributor contract that has allows this
@@ -183,7 +183,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     function withdrawTokens(address token) external onlyOwner {
         require(rewardsDistributorByRewardsToken[token] == address(0), "Cannot withdaw Reward Tokens");
         require(token != address(depositToken), "Cannot withdaw Deposit Token");
-        IERC20(token).transfer(owner, IERC20(token).balanceOf(address(this)));
+        IERC20(token).transfer(owner(), IERC20(token).balanceOf(address(this)));
     }
 
     function _min(uint a, uint b) internal pure returns (uint) {
