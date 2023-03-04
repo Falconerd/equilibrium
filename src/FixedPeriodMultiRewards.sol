@@ -90,7 +90,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         return _min(block.timestamp, nextPeriodTime);
     }
 
-    function rewardPerToken(address rewardsToken) public view returns (uint) {
+    function rewardPerToken(address rewardsToken) public returns (uint) {
         if (totalSupply() == 0) {
             return rewardPerTokenStored[rewardsToken];
         }
@@ -100,7 +100,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         );
     }
 
-    function earned(address user, address rewardsToken) public view returns (uint) {
+    function earned(address user, address rewardsToken) public returns (uint) {
         return (balanceOf(user) * (rewardPerToken(rewardsToken) - userRewardPerTokenPaid[user][rewardsToken]) / 1e18) + rewards[user][rewardsToken];
     }
 
@@ -148,6 +148,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
             uint amount = amounts[i];
 
             IERC20(token).transferFrom(rewardsDistributor[token], address(this), amount);
+            if (IERC20(token).balanceOf(address(this)) > 0) {}
             if (block.timestamp >= nextPeriodTime) {
                 rewardRate[token] = amount / period;
             } else {
