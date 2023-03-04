@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity 0.8.16;
 
-import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
-import "openzeppelin-contracts/contracts/security/Pausable.sol";
+import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
 
 // Modified MultiRewards contract to use a fixed-time period.
 // - Reward Tokens require a Distributor contract that has allows this
@@ -20,7 +20,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     uint public lastRewardsUpdateTime;
     uint public nextPeriodTime;
 
-    address[] public rewardTokens;
+    IERC20[] public rewardTokens;
 
     // Keep track of rewards for each token per period.
     struct RewardHistory {
@@ -29,7 +29,8 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     }
 
     // Reward Token => Value.
-    mapping(address => RewardHistory[]) public rewardHistory;
+    // Use the getRewardHistory function.
+    mapping(address => RewardHistory[]) private rewardHistory;
     mapping(address => uint) public rewardPerTokenStored;
     mapping(address => address) public rewardsDistributorByRewardsToken;
 
@@ -51,7 +52,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
 
     modifier updateReward(address user) {
         for (uint i = 0; i < rewardTokens.length; ++i) {
-            address token = rewardTokens[i];
+            address token = address(rewardTokens[i]);
             rewardPerTokenStored[token] = rewardPerToken(token);
             if (user != address(0)) {
                 rewards[user][token] = earned(user, token);
@@ -73,19 +74,33 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     ) ERC20(tokenName_, tokenSymbol_) {
         depositToken = depositToken_;
         period = period_;
+        contractDeployTime = block.timestamp;
     }
 
     function addReward(address rewardsToken_, address rewardsDistributor_) public onlyOwner {
         require(rewardsDistributorByRewardsToken[rewardsToken_] == address(0));
-        rewardTokens.push(rewardsToken_);
+        rewardTokens.push(IERC20(rewardsToken_));
         rewardsDistributorByRewardsToken[rewardsToken_] = rewardsDistributor_;
     }
 
     /* =============== VIEWS ================ */
 
-    // NOTE: Reverts if no reward periods have started.
+    function getRewardHistory(address token, uint index) external view returns (RewardHistory memory) {
+        RewardHistory[] storage history = rewardHistory[token];
+        require(index < history.length, "Out of bounds index");
+        return history[index];
+    }
+
+    function rewardTokensLength() external view returns (uint) {
+        return rewardTokens.length;
+    }
+
     function lastTimeRewardApplicable() public view returns (uint) {
-        return _min(nextPeriodTime - period, block.timestamp);
+        if (nextPeriodTime == 0) {
+            return 0;
+        } else {
+            return _min(nextPeriodTime - period, block.timestamp);
+        }
     }
 
     function rewardPerToken(address rewardsToken) public view returns (uint) {
@@ -97,7 +112,10 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         uint time = block.timestamp;
         // Prevent out of bounds read if block.timestamp is exactly on an period.
         uint firstPeriodIndex = (lastRewardsUpdateTime - contractDeployTime) / period;
-        uint lastPeriodIndex = time % period == 0 ? (time - contractDeployTime - 1) / period : (time - contractDeployTime) / period;
+        uint lastPeriodIndex;
+        if (rewardHistory[rewardsToken].length > 1) {
+            lastPeriodIndex = time % period == 0 ? (time - contractDeployTime - 1) / period : (time - contractDeployTime) / period;
+        }
 
         if (firstPeriodIndex > lastPeriodIndex) {
             firstPeriodIndex = lastPeriodIndex;
@@ -123,10 +141,6 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
 
     /* ================ MUTATIVE FUNCTIONS ================ */
 
-    function setRewardsDistributor(address rewardsToken, address rewardsDistributor) external onlyOwner {
-        rewardsDistributorByRewardsToken[rewardsToken] = rewardsDistributor;
-    }
-
     function deposit(uint amount) external whenNotPaused lock updateReward(msg.sender) {
         require(amount > 0, "Nothing to deposit");
         depositToken.transferFrom(msg.sender, address(this), amount);
@@ -141,7 +155,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
 
     function getReward() external lock updateReward(msg.sender) {
         for (uint i = 0; i < rewardTokens.length; ++i) {
-            address rewardsToken = rewardTokens[i];
+            address rewardsToken = address(rewardTokens[i]);
             uint reward = rewards[msg.sender][rewardsToken];
             if (reward > 0) {
                 rewards[msg.sender][rewardsToken] = 0;
@@ -150,7 +164,13 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         }
     }
 
+    function touch() external updateReward(msg.sender) {}
+
     /* ================ RESTRICTED FUNCTIONS ================ */
+
+    function setRewardsDistributor(address rewardsToken, address rewardsDistributor) external onlyOwner {
+        rewardsDistributorByRewardsToken[rewardsToken] = rewardsDistributor;
+    }
 
     function setPeriodStarter(address account) external onlyOwner {
         _periodStarter = account;
@@ -164,7 +184,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         require(time >= nextPeriodTime, "Period has not yet finished");
 
         for (uint i = 0; i < rewardTokens.length; ++i) {
-            address token = rewardTokens[i];
+            address token = address(rewardTokens[i]);
             address distributor = rewardsDistributorByRewardsToken[token];
 
             rewardHistory[token].push(RewardHistory({
