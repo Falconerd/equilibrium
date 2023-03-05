@@ -3,6 +3,7 @@ pragma solidity 0.8.16;
 
 import "../src/FixedPeriodMultiRewards.sol";
 import "../src/Token.sol";
+import "../src/MockGauge.sol";
 import "../src/RewardsDistributor.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import "forge-std/Test.sol";
@@ -14,6 +15,8 @@ contract FixedPeriodMultiRewardsTest is Test {
     address rewardTokenA;
     address rewardTokenB;
     address rewardsDistributor = address(new RewardsDistributor());
+    address mockGauge = address(new MockGauge());
+    uint gaugeId = 0;
 
     function setUp() public {
         startTimestamp = block.timestamp;
@@ -22,33 +25,29 @@ contract FixedPeriodMultiRewardsTest is Test {
         rewardTokenA = address(new Token("RewardTokenA", "RTA", 1_000_000_000e18));
         rewardTokenB = address(new Token("RewardTokenB", "RTB", 1_000_000_000e18));
 
-        fixedPeriodMultiRewards = new FixedPeriodMultiRewards(IERC20(depositToken), 6 hours, "FarmToken", "FT");
+        MockGauge(mockGauge).setTokenById(0, depositToken);
+
+        fixedPeriodMultiRewards = new FixedPeriodMultiRewards(IERC20(depositToken), IGauge(mockGauge), gaugeId, 6 hours, "FarmToken", "FT");
     }
 
     // Fixtures
 
-    function fixture_AddRewardTokens() internal {
+    function fixture_AddRewardTokens() private {
         fixedPeriodMultiRewards.addReward(rewardTokenA, address(this));
         fixedPeriodMultiRewards.addReward(rewardTokenB, address(this));
     }
 
-    function fixture_Deposit() internal {
+    function fixture_Deposit() private {
         IERC20(depositToken).approve(address(fixedPeriodMultiRewards), 100);
         fixedPeriodMultiRewards.deposit(100);
     }
 
-    function fixture_SetPeriodStarterToThisContract() internal {
+    function fixture_SetPeriodStarterToThisContract() private {
         fixedPeriodMultiRewards.setPeriodStarter(address(this));
     }
 
-    function fixture_StartNextPeriod(uint amountA, uint amountB) internal {
+    function fixture_StartNextPeriod(uint amountA, uint amountB) private {
         fixture_SetPeriodStarterToThisContract();
-        address[] memory rewardTokens = new address[](2);
-        rewardTokens[0] = rewardTokenA;
-        rewardTokens[1] = rewardTokenB;
-        uint[] memory amounts = new uint[](2);
-        amounts[0] = amountA;
-        amounts[1] = amountB;
 
         IRewardsDistributor(fixedPeriodMultiRewards.rewardsDistributor(rewardTokenA))
             .setNextAmountToDistribute(rewardTokenA, amountA);
@@ -57,7 +56,7 @@ contract FixedPeriodMultiRewardsTest is Test {
         fixedPeriodMultiRewards.startNextPeriod();
     }
 
-    function fixture_SetupRewards() internal {
+    function fixture_SetupRewards() private {
         fixture_AddRewardTokens();
 
         // Deposit rewards for next period.

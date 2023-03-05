@@ -14,7 +14,7 @@ contract RewardsDistributor is IRewardsDistributor, Ownable, Pausable {
         nextAmountToDistribute[token] = amount;
     }
 
-    function approve(address spender, address token, uint amount) onlyOwner external {
+    function approve(address spender, address token, uint amount) external {
         IERC20(token).approve(spender, amount);
     }
 }

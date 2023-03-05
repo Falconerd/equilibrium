@@ -6,6 +6,7 @@ import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
 import "./IRewardsDistributor.sol";
+import "./IGauge.sol";
 
 // Modified MultiRewards contract to use a fixed-time period.
 // - Reward Tokens require a Distributor contract that has allows this
@@ -13,9 +14,13 @@ import "./IRewardsDistributor.sol";
 // - Each new Period, Reward Tokens are sent from each distributor
 //   to this contract, and the rewardRate calculated from the
 //   nextAmountToDistribute(token) function on the distributor.
+// - Optionally deposit into an IGauge. Use beforeDeposit/Withdraw
+//   and afterDeposit/Withdraw to handle auto-harvested rewards.
 contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     uint   public immutable period;
     IERC20 public immutable depositToken;
+    IGauge public immutable gauge;
+    uint   public immutable gaugeId;
 
     event Log(uint, uint);
 
@@ -64,13 +69,22 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
 
     constructor(
         IERC20 depositToken_,
+        IGauge gauge_,
+        uint gaugeId_,
         uint period_,
         string memory tokenName_,
         string memory tokenSymbol_
     ) ERC20(tokenName_, tokenSymbol_) {
         depositToken = depositToken_;
+        gauge = gauge_;
+        gaugeId = gaugeId_;
         period = period_;
         contractDeployTime = block.timestamp;
+        _periodStarter = msg.sender;
+
+        if (address(gauge) != address(0)) {
+            IERC20(depositToken_).approve(address(gauge), type(uint).max);
+        }
     }
 
     function addReward(address rewardsToken_, address rewardsDistributor_) public onlyOwner {
@@ -105,16 +119,26 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
 
     /* ================ MUTATIVE FUNCTIONS ================ */
 
-    function deposit(uint amount) external whenNotPaused lock updateReward(msg.sender) {
+    function deposit(uint amount) public whenNotPaused lock updateReward(msg.sender) {
         require(amount > 0, "Nothing to deposit");
+        _beforeDeposit();
         depositToken.transferFrom(msg.sender, address(this), amount);
+        if (address(gauge) != address(0)) {
+            gauge.deposit(gaugeId, amount);
+        }
         _mint(msg.sender, amount);
+        _afterDeposit();
     }
 
-    function withdraw(uint amount) external lock updateReward(msg.sender) {
+    function withdraw(uint amount) public lock updateReward(msg.sender) {
         require(amount > 0, "Nothing to withdraw");
+        _beforeWithdraw();
         _burn(msg.sender, amount);
+        if (address(gauge) != address(0)) {
+            gauge.withdraw(gaugeId, amount);
+        }
         depositToken.transfer(msg.sender, amount);
+        _afterWithdraw();
     }
 
     function getReward() external lock updateReward(msg.sender) {
@@ -131,6 +155,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     /* ================ RESTRICTED FUNCTIONS ================ */
 
     function setRewardsDistributor(address rewardsToken, address rewardsDistributor_) external onlyOwner {
+        require(rewardsDistributor[rewardsToken] != address(0), "use addReward");
         rewardsDistributor[rewardsToken] = rewardsDistributor_;
     }
 
@@ -170,5 +195,11 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     function _min(uint a, uint b) internal pure returns (uint) {
         return a <= b ? a : b;
     }
+
+
+    function _beforeDeposit() internal virtual {}
+    function _beforeWithdraw() internal virtual {}
+    function _afterDeposit() internal virtual {}
+    function _afterWithdraw() internal virtual {}
 }
 
