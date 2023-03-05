@@ -5,13 +5,14 @@ import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
+import "./IRewardsDistributor.sol";
 
 // Modified MultiRewards contract to use a fixed-time period.
 // - Reward Tokens require a Distributor contract that has allows this
 //   contract to spend the Reward Token.
-// - Each new Period, all Reward Tokens are sent from each distributor
-//   to this contract, and the rewardRate is set to the totalSupply of
-//   the distributor before sending.
+// - Each new Period, Reward Tokens are sent from each distributor
+//   to this contract, and the rewardRate calculated from the
+//   nextAmountToDistribute(token) function on the distributor.
 contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     uint   public immutable period;
     IERC20 public immutable depositToken;
@@ -137,16 +138,15 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         _periodStarter = account;
     }
 
-    function notifyRewardAmounts(address[] calldata rewardsTokens, uint[] calldata amounts) external updateReward(address(0)) {
+    function startNextPeriod() external updateReward(address(0)) {
         require(msg.sender == _periodStarter);
-        require(rewardsTokens.length == amounts.length);
 
-        for (uint i = 0; i < rewardsTokens.length; ++i) {
-            address token = rewardsTokens[i];
-            uint amount = amounts[i];
+        for (uint i = 0; i < rewardTokens.length; ++i) {
+            address token = address(rewardTokens[i]);
+            uint amount = IRewardsDistributor(rewardsDistributor[token]).nextAmountToDistribute(token);
 
             IERC20(token).transferFrom(rewardsDistributor[token], address(this), amount);
-            if (IERC20(token).balanceOf(address(this)) > 0) {}
+
             if (block.timestamp >= nextPeriodTime) {
                 rewardRate[token] = amount / period;
             } else {

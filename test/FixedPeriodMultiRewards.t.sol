@@ -3,7 +3,7 @@ pragma solidity 0.8.16;
 
 import "../src/FixedPeriodMultiRewards.sol";
 import "../src/Token.sol";
-import "../src/Dummy.sol";
+import "../src/RewardsDistributor.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import "forge-std/Test.sol";
 
@@ -13,7 +13,7 @@ contract FixedPeriodMultiRewardsTest is Test {
     address depositToken;
     address rewardTokenA;
     address rewardTokenB;
-    address dummyHolder = address(new Dummy());
+    address rewardsDistributor = address(new RewardsDistributor());
 
     function setUp() public {
         startTimestamp = block.timestamp;
@@ -49,23 +49,28 @@ contract FixedPeriodMultiRewardsTest is Test {
         uint[] memory amounts = new uint[](2);
         amounts[0] = amountA;
         amounts[1] = amountB;
-        fixedPeriodMultiRewards.notifyRewardAmounts(rewardTokens, amounts);
+
+        IRewardsDistributor(fixedPeriodMultiRewards.rewardsDistributor(rewardTokenA))
+            .setNextAmountToDistribute(rewardTokenA, amountA);
+        IRewardsDistributor(fixedPeriodMultiRewards.rewardsDistributor(rewardTokenB))
+            .setNextAmountToDistribute(rewardTokenB, amountB);
+        fixedPeriodMultiRewards.startNextPeriod();
     }
 
     function fixture_SetupRewards() internal {
         fixture_AddRewardTokens();
 
         // Deposit rewards for next period.
-        IERC20(rewardTokenA).transfer(dummyHolder, 1_000_000_000e18);
-        IERC20(rewardTokenB).transfer(dummyHolder, 1_000_000_000e18);
+        IERC20(rewardTokenA).transfer(rewardsDistributor, 1_000_000_000e18);
+        IERC20(rewardTokenB).transfer(rewardsDistributor, 1_000_000_000e18);
 
         // Set up reward distributors.
-        fixedPeriodMultiRewards.setRewardsDistributor(rewardTokenA, dummyHolder);
-        fixedPeriodMultiRewards.setRewardsDistributor(rewardTokenB, dummyHolder);
+        fixedPeriodMultiRewards.setRewardsDistributor(rewardTokenA, rewardsDistributor);
+        fixedPeriodMultiRewards.setRewardsDistributor(rewardTokenB, rewardsDistributor);
 
-        // Dummy allows this contract to spend tokens.
-        Dummy(dummyHolder).approve(address(fixedPeriodMultiRewards), rewardTokenA, IERC20(rewardTokenA).balanceOf(address(dummyHolder)));
-        Dummy(dummyHolder).approve(address(fixedPeriodMultiRewards), rewardTokenB, IERC20(rewardTokenB).balanceOf(address(dummyHolder)));
+        // RewardsDistributor allows this contract to spend tokens.
+        RewardsDistributor(rewardsDistributor).approve(address(fixedPeriodMultiRewards), rewardTokenA, IERC20(rewardTokenA).balanceOf(address(rewardsDistributor)));
+        RewardsDistributor(rewardsDistributor).approve(address(fixedPeriodMultiRewards), rewardTokenB, IERC20(rewardTokenB).balanceOf(address(rewardsDistributor)));
     }
 
     // Tests
