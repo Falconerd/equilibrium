@@ -6,7 +6,6 @@ import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
 
-// THIS CONTRACT IS WIP AND HAS BUGS, DO NOT USE UNTIL THIS NOTICE IS REMOVED
 // Modified MultiRewards contract to use a fixed-time period.
 // - Reward Tokens require a Distributor contract that has allows this
 //   contract to spend the Reward Token.
@@ -20,7 +19,6 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     event Log(uint, uint);
 
     uint public contractDeployTime;
-    uint public lastRewardsUpdateTime;
     uint public nextPeriodTime;
 
     // Keep track of rewards for each token.
@@ -90,7 +88,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         return _min(block.timestamp, nextPeriodTime);
     }
 
-    function rewardPerToken(address rewardsToken) public returns (uint) {
+    function rewardPerToken(address rewardsToken) public view returns (uint) {
         if (totalSupply() == 0) {
             return rewardPerTokenStored[rewardsToken];
         }
@@ -100,7 +98,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         );
     }
 
-    function earned(address user, address rewardsToken) public returns (uint) {
+    function earned(address user, address rewardsToken) public view returns (uint) {
         return (balanceOf(user) * (rewardPerToken(rewardsToken) - userRewardPerTokenPaid[user][rewardsToken]) / 1e18) + rewards[user][rewardsToken];
     }
 
@@ -161,7 +159,6 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         }
 
         nextPeriodTime = block.timestamp + period;
-        lastRewardsUpdateTime = block.timestamp;
     }
 
     function withdrawTokens(address token) external onlyOwner {

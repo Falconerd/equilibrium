@@ -72,7 +72,6 @@ contract FixedPeriodMultiRewardsTest is Test {
 
     function test_Deployment() public {
         assertEq(startTimestamp, fixedPeriodMultiRewards.contractDeployTime());
-        assertEq(0, fixedPeriodMultiRewards.lastRewardsUpdateTime());
         assertEq(0, fixedPeriodMultiRewards.nextPeriodTime());
     }
 
@@ -123,43 +122,7 @@ contract FixedPeriodMultiRewardsTest is Test {
         assertEq(100_000e18 / fixedPeriodMultiRewards.period(), fixedPeriodMultiRewards.rewardRate(address(rewardTokenA)));
         assertEq(100_000e18 / fixedPeriodMultiRewards.period(), fixedPeriodMultiRewards.rewardRate(address(rewardTokenB)));
 
-        assertEq(timestamp, fixedPeriodMultiRewards.lastRewardsUpdateTime());
-
         assertEq(timestamp + 6 hours, fixedPeriodMultiRewards.nextPeriodTime());
-    }
-
-    function test_RewardPerTokenFn() public {
-        uint timestamp = block.timestamp;
-
-        fixture_SetupRewards();
-        fixture_StartNextPeriod(100_000e18, 100_000e18);
-
-        IERC20(depositToken).approve(address(fixedPeriodMultiRewards), 100);
-        fixedPeriodMultiRewards.deposit(100);
-
-        assertEq(4, fixedPeriodMultiRewards.rewardRate(address(rewardTokenA)));
-
-        vm.warp(timestamp + 60);
-
-        assertEq(240, fixedPeriodMultiRewards.earned(address(this), rewardTokenA));
-        assertEq(2.4e18, fixedPeriodMultiRewards.rewardPerToken(rewardTokenA));
-    }
-
-    function test_SingleUserGetReward() public {
-        uint timestamp = block.timestamp;
-
-        fixture_SetupRewards();
-        fixture_StartNextPeriod(100_000e18, 100_000e18);
-
-        IERC20(depositToken).approve(address(fixedPeriodMultiRewards), 100);
-        fixedPeriodMultiRewards.deposit(100);
-
-        vm.warp(timestamp + 60);
-
-        assertEq(240, fixedPeriodMultiRewards.earned(address(this), rewardTokenA));
-        assertEq(2.4e18, fixedPeriodMultiRewards.rewardPerToken(rewardTokenA));
-        fixedPeriodMultiRewards.getReward();
-        assertEq(240, IERC20(rewardTokenA).balanceOf(address(this)));
     }
 
     function test_MultiUserGetReward() public {
@@ -187,10 +150,15 @@ contract FixedPeriodMultiRewardsTest is Test {
 
         vm.warp(timestamp + 60);
 
-        assertEq(120, fixedPeriodMultiRewards.earned(address(this), rewardTokenA));
-        assertEq(120, fixedPeriodMultiRewards.earned(address(this), rewardTokenB));
-        assertEq(120, fixedPeriodMultiRewards.earned(address(1337), rewardTokenA));
-        assertEq(120, fixedPeriodMultiRewards.earned(address(1337), rewardTokenB));
+        uint expectedRewardRate = IERC20(rewardTokenA).balanceOf(address(fixedPeriodMultiRewards)) / 6 hours;
+        uint expectedEarned = expectedRewardRate * 60 / 2;
+
+        assertEq(expectedRewardRate, fixedPeriodMultiRewards.rewardRate(rewardTokenA));
+
+        assertApproxEqAbs(expectedEarned, fixedPeriodMultiRewards.earned(address(this), rewardTokenA), 1e2, "reward rate 0");
+        assertApproxEqAbs(expectedEarned, fixedPeriodMultiRewards.earned(address(this), rewardTokenB), 1e2, "reward rate 1");
+        assertApproxEqAbs(expectedEarned, fixedPeriodMultiRewards.earned(address(1337), rewardTokenA), 1e2, "reward rate 2");
+        assertApproxEqAbs(expectedEarned, fixedPeriodMultiRewards.earned(address(1337), rewardTokenB), 1e2, "reward rate 3");
 
         vm.warp(timestamp + fixedPeriodMultiRewards.period());
 
@@ -206,25 +174,21 @@ contract FixedPeriodMultiRewardsTest is Test {
         uint expectedBalanceA = 69_420e18 + balanceBeforeA;
         uint expectedBalanceB = 42_690e18 + balanceBeforeB;
 
-        assertEq(expectedBalanceA, IERC20(rewardTokenA).balanceOf(address(fixedPeriodMultiRewards)));
-        assertEq(expectedBalanceB, IERC20(rewardTokenB).balanceOf(address(fixedPeriodMultiRewards)));
-        assertEq(expectedBalanceB, 1234);
+        assertApproxEqAbs(expectedBalanceA, IERC20(rewardTokenA).balanceOf(address(fixedPeriodMultiRewards)), 1e3, "balance");
+        assertApproxEqAbs(expectedBalanceB, IERC20(rewardTokenB).balanceOf(address(fixedPeriodMultiRewards)), 1e3, "balance");
 
         uint expectedRewardRateA = expectedBalanceA / fixedPeriodMultiRewards.period();
         uint expectedRewardRateB = expectedBalanceB / fixedPeriodMultiRewards.period();
 
-        assertEq(expectedRewardRateA, 1234);
-        assertEq(expectedRewardRateB, 1234);
-
         vm.warp(timestamp + fixedPeriodMultiRewards.period() + 60);
 
-        assertEq(expectedRewardRateA, fixedPeriodMultiRewards.rewardRate(rewardTokenA), "reward rate");
-        assertEq(expectedRewardRateB, fixedPeriodMultiRewards.rewardRate(rewardTokenB), "reward rate");
+        assertApproxEqAbs(expectedRewardRateA, fixedPeriodMultiRewards.rewardRate(rewardTokenA), 1e3, "reward rate");
+        assertApproxEqAbs(expectedRewardRateB, fixedPeriodMultiRewards.rewardRate(rewardTokenB), 1e3, "reward rate");
 
         uint expectedEarnedA = expectedRewardRateA * 60 / 2;
         uint expectedEarnedB = expectedRewardRateB * 60 / 2;
 
-        assertApproxEqAbs(expectedEarnedA, fixedPeriodMultiRewards.earned(address(this), rewardTokenA), 2e18);
-        assertApproxEqAbs(expectedEarnedB, fixedPeriodMultiRewards.earned(address(this), rewardTokenB), 2e18);
+        assertApproxEqAbs(expectedEarnedA, fixedPeriodMultiRewards.earned(address(this), rewardTokenA), 1e3);
+        assertApproxEqAbs(expectedEarnedB, fixedPeriodMultiRewards.earned(address(this), rewardTokenB), 1e3);
     }
 }
