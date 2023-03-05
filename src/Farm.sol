@@ -6,11 +6,15 @@ import {IRewardsDistributor} from "./IRewardsDistributor.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
+import "./ICore.sol";
 import "./IGauge.sol";
+import "./IOracle.sol";
+import "./RewardsDistributor.sol";
 
 // This contract take in spLP tokens from SpookySwap
 // and deposits then into a gauge.
 contract Farm is FixedPeriodMultiRewards {
+    address public immutable core;
     // Since some rewards are auto-claimed on user interaction
     // they need to be sent to the rewardsDistributor.
     address[] public autoClaimedRewards;
@@ -18,14 +22,20 @@ contract Farm is FixedPeriodMultiRewards {
     mapping(address => uint) public amountBefore;
     mapping(address => bool) public autoClaimedRewardsAdded;
 
+    address public oracle;
+    uint public totalValueLocked;
+
     constructor(
         IERC20 depositToken_,
         IGauge gauge_,
+        IOracle oracle_,
         uint gaugeId_,
         uint period_,
         string memory tokenName_,
         string memory tokenSymbol_
-    ) FixedPeriodMultiRewards(depositToken_, gauge_, gaugeId_, period_, tokenName_, tokenSymbol_) {}
+    ) FixedPeriodMultiRewards(depositToken_, gauge_, gaugeId_, period_, tokenName_, tokenSymbol_) {
+        core = msg.sender;
+    }
 
     /* ================ MUTATIVE FUNCTIONS ================ */
 
@@ -47,6 +57,8 @@ contract Farm is FixedPeriodMultiRewards {
 
     function _afterDeposit() internal override {
         _transferRewards();
+        _updateTotalValueLocked();
+        ICore(core).updateScore();
     }
 
     function _beforeWithdraw() internal override {
@@ -58,6 +70,8 @@ contract Farm is FixedPeriodMultiRewards {
 
     function _afterWithdraw() internal override {
         _transferRewards();
+        _updateTotalValueLocked();
+        ICore(core).updateScore();
     }
 
     function _transferRewards() private {
@@ -70,6 +84,12 @@ contract Farm is FixedPeriodMultiRewards {
             IRewardsDistributor(rewardsDistributor[address(token)])
                 .setNextAmountToDistribute(address(token), rewarderBalance + difference);
         }
+    }
+
+    function _updateTotalValueLocked() private {
+        (uint p0, uint p1) = IOracle(oracle).getPrices();
+        (uint b0, uint b1) = IOracle(oracle).getBalances(totalSupply());
+        totalValueLocked = p0 * b0 + b1 * b1;
     }
 
     /* ================ VIEW FUNCTIONS ================ */

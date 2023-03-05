@@ -3,6 +3,7 @@ pragma solidity 0.8.16;
 
 import "../src/Token.sol";
 import "../src/MockGauge.sol";
+import "../src/MockOracle.sol";
 import "../src/RewardsDistributor.sol";
 import "../src/Farm.sol";
 import "../src/FixedPeriodMultiRewards.sol";
@@ -18,6 +19,7 @@ contract FarmTest is Test {
     address rewardTokenB;
     address distributor = address(new RewardsDistributor());
     address mockGauge = address(new MockGauge());
+    address oracle = address(new MockOracle());
     uint gaugeId = 0;
 
     function setUp() public {
@@ -28,7 +30,7 @@ contract FarmTest is Test {
 
         MockGauge(mockGauge).setTokenById(0, depositToken);
 
-        farm = new Farm(IERC20(depositToken), IGauge(mockGauge), gaugeId, 6 hours, "FarmToken", "FT");
+        farm = new Farm(IERC20(depositToken), IGauge(mockGauge), IOracle(oracle), gaugeId, 6 hours, "FarmToken", "FT");
     }
 
     function test_AutoClaimedRewards() public {
