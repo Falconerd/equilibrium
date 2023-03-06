@@ -2,10 +2,14 @@
 pragma solidity 0.8.16;
 
 import "../src/Core.sol";
+import "../src/ICore.sol";
 import "../src/MockOracle.sol";
 import "../src/MockGauge.sol";
 import "../src/Token.sol";
+import "../src/Farm.sol";
+import "../src/StakedToken.sol";
 import "../src/IDepositWithdraw.sol";
+import "../src/RewardsDistributor.sol";
 import "forge-std/Test.sol";
 
 // Since this contract inherits FixedPeriodMultiRewards, only test
@@ -16,32 +20,51 @@ contract CoreTest is Test {
     address rewardTokenA;
     address rewardTokenB;
     Core core;
+    address eqlToken;
+    address xEqlToken;
 
     function setUp() public {
         depositToken = address(new Token("DEP", "DEP", 100_000e18));
         rewardTokenA = address(new Token("RWA", "RWA", 100_000e18));
         rewardTokenB = address(new Token("RWB", "RWB", 100_000e18));
-        core = new Core();
+        eqlToken = address(new Token("EQL", "EQL", 1_000_000_000e18));
+        xEqlToken = address(new StakedToken(eqlToken));
+        core = new Core(eqlToken, xEqlToken);
     }
 
     function test_DeployFarm() public {
         address oracle = address(new MockOracle());
         address gauge = address(new MockGauge());
-        address farm = core.deploy(depositToken, gauge, 0, oracle);
+        address distributor = address(new RewardsDistributor());
+        address farm = address(new Farm(ICore(address(core)), IERC20(depositToken), IGauge(gauge), 0, IOracle(oracle), 6 hours));
+
+        RewardsDistributor(distributor).setDistributee(farm, true);
+        core.register(farm, depositToken, distributor);
 
         assertEq(core.farms(0), farm);
         assertEq(core.farmIdByAddress(farm), 0);
         assertEq(core.farmIdByDepositToken(depositToken), core.farmIdByAddress(farm));
-        assert(address(0) != core.defaultDistributor(farm));
     }
 
     function test_DeployMultipleFarmsSetUpActiveFarms() public {
         address oracle = address(new MockOracle());
         address gauge = address(new MockGauge());
-        address farm0 = core.deploy(depositToken, gauge, 0, oracle);
-        address farm1 = core.deploy(depositToken, gauge, 1, oracle);
-        address farm2 = core.deploy(depositToken, gauge, 2, oracle);
-        address farm3 = core.deploy(depositToken, gauge, 3, oracle);
+
+        address farm0 = address(new Farm(ICore(address(core)), IERC20(depositToken), IGauge(gauge), 0, IOracle(oracle), 6 hours));
+        address farm1 = address(new Farm(ICore(address(core)), IERC20(depositToken), IGauge(gauge), 0, IOracle(oracle), 6 hours));
+        address farm2 = address(new Farm(ICore(address(core)), IERC20(depositToken), IGauge(gauge), 0, IOracle(oracle), 6 hours));
+        address farm3 = address(new Farm(ICore(address(core)), IERC20(depositToken), IGauge(gauge), 0, IOracle(oracle), 6 hours));
+
+        address distributor = address(new RewardsDistributor());
+
+        RewardsDistributor(distributor).setDistributee(farm0, true);
+        RewardsDistributor(distributor).setDistributee(farm1, true);
+        RewardsDistributor(distributor).setDistributee(farm2, true);
+        RewardsDistributor(distributor).setDistributee(farm3, true);
+        core.register(farm0, depositToken, distributor);
+        core.register(farm1, depositToken, distributor);
+        core.register(farm2, depositToken, distributor);
+        core.register(farm3, depositToken, distributor);
 
         MockGauge(gauge).setTokenById(0, depositToken);
         MockGauge(gauge).setTokenById(1, depositToken);

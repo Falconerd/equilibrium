@@ -9,12 +9,11 @@ import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
 import "./ICore.sol";
 import "./IGauge.sol";
 import "./IOracle.sol";
-import "./RewardsDistributor.sol";
 
 // This contract take in spLP tokens from SpookySwap
 // and deposits then into a gauge.
 contract Farm is FixedPeriodMultiRewards {
-    address public immutable core;
+    ICore public immutable core;
     // Since some rewards are auto-claimed on user interaction
     // they need to be sent to the rewardsDistributor.
     address[] public autoClaimedRewards;
@@ -32,15 +31,14 @@ contract Farm is FixedPeriodMultiRewards {
     int[] public values;
 
     constructor(
+        ICore core_,
         IERC20 depositToken_,
         IGauge gauge_,
-        IOracle oracle_,
         uint gaugeId_,
-        uint period_,
-        string memory tokenName_,
-        string memory tokenSymbol_
-    ) FixedPeriodMultiRewards(depositToken_, gauge_, gaugeId_, period_, tokenName_, tokenSymbol_) {
-        core = msg.sender;
+        IOracle oracle_,
+        uint period_
+    ) FixedPeriodMultiRewards(depositToken_, gauge_, gaugeId_, period_, "eqF", "eqF") {
+        core = core_;
         oracle = oracle_;
     }
 

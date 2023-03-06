@@ -1,17 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.16;
 
-import {FixedPeriodMultiRewards} from "./FixedPeriodMultiRewards.sol";
-import {IRewardsDistributor} from "./IRewardsDistributor.sol";
+import {IFixedPeriodMultiRewards} from "./IFixedPeriodMultiRewards.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
-import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
-import "./IGauge.sol";
-import "./IOracle.sol";
-import "./Farm.sol";
-import "./Token.sol";
-import "./StakedToken.sol";
-import "./VoteLockedToken.sol";
+import "./IFarm.sol";
 
 contract Core is Ownable {
     using UQ112x112 for uint224;
@@ -25,7 +18,6 @@ contract Core is Ownable {
 
     mapping(address => uint) public farmIdByAddress;
     mapping(address => uint) public farmIdByDepositToken;
-    mapping(address => address) public defaultDistributor;
 
     // Equilibrium score.
     uint32 public lastTimestamp;
@@ -66,10 +58,9 @@ contract Core is Ownable {
     event UpdateScore(int value, int accumulatedScore, int score, int d0, int d1, int d2, int d3);
 
     constructor(address eqlToken_, address xEqlToken_) {
-
         uint eqlMaxSupply = 1_000_000_000e18;
-        eqlToken = address(new Token("Equilibrium", "EQL", eqlMaxSupply));
-        xEqlToken = address(new StakedToken(eqlToken));
+        eqlToken = eqlToken_;
+        xEqlToken = xEqlToken_;
         /* vEqlToken = address(new VoteLockedToken(xEqlToken)); */
         admin = msg.sender;
 
@@ -77,17 +68,12 @@ contract Core is Ownable {
         maxEmissionsPerEpoch = uint112(eqlMaxSupply / MIN_TOTAL_EMISSIONS_PERIOD) / EPOCH;
     }
 
-    function deploy(address depositToken, address gauge, uint gaugeId, address oracle, address distributor) public onlyOwner returns (address) {
-        // Deploy farm contract.
-        address farm = address(new Farm(IERC20(depositToken), IGauge(gauge), IOracle(oracle), gaugeId, EPOCH, "eqlF", "eqlF"));
+    function register(address farm, address depositToken, address distributor) public onlyOwner returns (address) {
+        // Add newly deployed farm contract.
         uint id = farms.length;
         farmIdByDepositToken[depositToken] = id;
         farmIdByAddress[farm] = id;
         farms.push(farm);
-
-        // Deploy rewards distributor.
-        Ownable(distributor).transferOwnership(farm);
-        defaultDistributor[farm] = distributor;
 
         emit FarmCreated(farm, farms.length);
 
@@ -135,10 +121,10 @@ contract Core is Ownable {
         epochs.push(timestamp);
 
         // Transfer to farm rewards distributor.
-        IERC20(eqlToken).transfer(FixedPeriodMultiRewards(activeFarms[0]).rewardsDistributor(eqlToken), rewardsFarms);
-        IERC20(eqlToken).transfer(FixedPeriodMultiRewards(activeFarms[1]).rewardsDistributor(eqlToken), rewardsFarms);
-        IERC20(eqlToken).transfer(FixedPeriodMultiRewards(activeFarms[2]).rewardsDistributor(eqlToken), rewardsFarms);
-        IERC20(eqlToken).transfer(FixedPeriodMultiRewards(activeFarms[3]).rewardsDistributor(eqlToken), rewardsFarms);
+        IERC20(eqlToken).transfer(IFixedPeriodMultiRewards(activeFarms[0]).rewardsDistributor(eqlToken), rewardsFarms);
+        IERC20(eqlToken).transfer(IFixedPeriodMultiRewards(activeFarms[1]).rewardsDistributor(eqlToken), rewardsFarms);
+        IERC20(eqlToken).transfer(IFixedPeriodMultiRewards(activeFarms[2]).rewardsDistributor(eqlToken), rewardsFarms);
+        IERC20(eqlToken).transfer(IFixedPeriodMultiRewards(activeFarms[3]).rewardsDistributor(eqlToken), rewardsFarms);
 
         IERC20(eqlToken).transfer(xEqlToken, rewardsVault);
         IERC20(eqlToken).transfer(admin, rewardsAdmin);
@@ -149,27 +135,27 @@ contract Core is Ownable {
         require(address(activeFarms[1]) != address(0), "farm1 not active");
         require(address(activeFarms[2]) != address(0), "farm2 not active");
         require(address(activeFarms[3]) != address(0), "farm3 not active");
-
+        
         uint32 timestamp = currentTimestamp();
-
+        
         // Don't require because then it reverts deposits and withdrawals.
         if (timestamp - lastTimestamp >= PERIOD) {
             lastTimestamp = timestamp;
-
-            int tvl0 = int(Farm(activeFarms[0]).totalValueLocked());
-            int tvl1 = int(Farm(activeFarms[1]).totalValueLocked());
-            int tvl2 = int(Farm(activeFarms[2]).totalValueLocked());
-            int tvl3 = int(Farm(activeFarms[3]).totalValueLocked());
-
+        
+            int tvl0 = int(IFarm(activeFarms[0]).totalValueLocked());
+            int tvl1 = int(IFarm(activeFarms[1]).totalValueLocked());
+            int tvl2 = int(IFarm(activeFarms[2]).totalValueLocked());
+            int tvl3 = int(IFarm(activeFarms[3]).totalValueLocked());
+        
             int average = (tvl0 + tvl1 + tvl2 + tvl3) / 4;
-
+        
             int delta0 = abs(average - tvl0);
             int delta1 = abs(average - tvl1);
             int delta2 = abs(average - tvl2);
             int delta3 = abs(average - tvl3);
-
+        
             int value;
-
+        
             if (average == 0) {
                 value = 0;
             } else {
@@ -182,14 +168,14 @@ contract Core is Ownable {
 
             observations.push(value);
             accumulatedScore += value;
-
+        
             if (observations.length > QUANTITY) {
                 accumulatedScore -= observations[observations.length - QUANTITY - 1];
                 score = (score + accumulatedScore / int32(QUANTITY)) / 2;
             } else {
                 score = accumulatedScore / int(observations.length);
             }
-
+        
             emit UpdateScore(value, accumulatedScore, score, delta0, delta1, delta2, delta3);
         }
     }
