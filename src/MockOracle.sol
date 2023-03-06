@@ -3,27 +3,9 @@ pragma solidity 0.8.16;
 
 import "./IOracle.sol";
 
+// Mock Oracle, tokens always worth 1 USDC.
 contract MockOracle is IOracle {
-    uint b0;
-    uint b1;
-    uint p0;
-    uint p1;
-
-    function getBalances(uint amount) external returns (uint, uint) {
-        return (0, 0);
-    }
-
-    function getPrices() external returns (uint, uint) {
-        return (0, 0);
-    }
-
-    function setBalances(uint b0_, uint b1_) public {
-        b0 = b0_;
-        b1 = b1_;
-    }
-
-    function setPrices(uint p0_, uint p1_) public {
-        p0 = p0_;
-        p1 = p1_;
+    function consult(address, uint amountIn) external pure returns (uint) {
+        return amountIn * 1e6;
     }
 }

@@ -5,6 +5,7 @@ import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
+import "./IDepositWithdraw.sol";
 import "./IRewardsDistributor.sol";
 import "./IGauge.sol";
 
@@ -16,7 +17,7 @@ import "./IGauge.sol";
 //   nextAmountToDistribute(token) function on the distributor.
 // - Optionally deposit into an IGauge. Use beforeDeposit/Withdraw
 //   and afterDeposit/Withdraw to handle auto-harvested rewards.
-contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
+contract FixedPeriodMultiRewards is IDepositWithdraw, ERC20, Ownable, Pausable {
     uint   public immutable period;
     IERC20 public immutable depositToken;
     IGauge public immutable gauge;
@@ -83,7 +84,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         _periodStarter = msg.sender;
 
         if (address(gauge) != address(0)) {
-            IERC20(depositToken_).approve(address(gauge), type(uint).max);
+            depositToken.approve(address(gauge), type(uint).max);
         }
     }
 

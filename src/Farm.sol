@@ -22,8 +22,14 @@ contract Farm is FixedPeriodMultiRewards {
     mapping(address => uint) public amountBefore;
     mapping(address => bool) public autoClaimedRewardsAdded;
 
-    address public oracle;
+    // Time Weighted Average TVL.
+    IOracle public oracle;
     uint public totalValueLocked;
+    uint public constant PERIOD = 30 minutes;
+    uint public constant QUANTITY = 12;
+    uint public lastTimestamp;
+    int public accumulatedValue;
+    int[] public values;
 
     constructor(
         IERC20 depositToken_,
@@ -35,6 +41,7 @@ contract Farm is FixedPeriodMultiRewards {
         string memory tokenSymbol_
     ) FixedPeriodMultiRewards(depositToken_, gauge_, gaugeId_, period_, tokenName_, tokenSymbol_) {
         core = msg.sender;
+        oracle = oracle_;
     }
 
     /* ================ MUTATIVE FUNCTIONS ================ */
@@ -87,9 +94,21 @@ contract Farm is FixedPeriodMultiRewards {
     }
 
     function _updateTotalValueLocked() private {
-        (uint p0, uint p1) = IOracle(oracle).getPrices();
-        (uint b0, uint b1) = IOracle(oracle).getBalances(totalSupply());
-        totalValueLocked = p0 * b0 + b1 * b1;
+        uint timestamp = block.timestamp;
+        if (timestamp - lastTimestamp >= PERIOD) {
+            int value = int(IOracle(oracle).consult(address(depositToken), totalSupply()));
+
+            values.push(value);
+            accumulatedValue += value;
+            lastTimestamp = timestamp;
+            
+            if (values.length > QUANTITY) {
+                accumulatedValue -= values[values.length - QUANTITY - 1];
+                totalValueLocked = uint((value + accumulatedValue / int(QUANTITY)) / 2);
+            } else {
+                totalValueLocked = uint(accumulatedValue / int(values.length));
+            }
+        }
     }
 
     /* ================ VIEW FUNCTIONS ================ */
