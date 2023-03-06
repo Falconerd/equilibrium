@@ -39,7 +39,8 @@ contract CoreTest is Test {
         address farm = address(new Farm(ICore(address(core)), IERC20(depositToken), IGauge(gauge), 0, IOracle(oracle), 6 hours));
 
         RewardsDistributor(distributor).setDistributee(farm, true);
-        core.register(farm, depositToken, distributor);
+        IFarm(farm).addReward(depositToken, distributor);
+        core.register(farm, depositToken);
 
         assertEq(core.farms(0), farm);
         assertEq(core.farmIdByAddress(farm), 0);
@@ -61,10 +62,14 @@ contract CoreTest is Test {
         RewardsDistributor(distributor).setDistributee(farm1, true);
         RewardsDistributor(distributor).setDistributee(farm2, true);
         RewardsDistributor(distributor).setDistributee(farm3, true);
-        core.register(farm0, depositToken, distributor);
-        core.register(farm1, depositToken, distributor);
-        core.register(farm2, depositToken, distributor);
-        core.register(farm3, depositToken, distributor);
+        core.register(farm0, depositToken);
+        core.register(farm1, depositToken);
+        core.register(farm2, depositToken);
+        core.register(farm3, depositToken);
+        IFarm(farm0).addReward(depositToken, distributor);
+        IFarm(farm1).addReward(depositToken, distributor);
+        IFarm(farm2).addReward(depositToken, distributor);
+        IFarm(farm3).addReward(depositToken, distributor);
 
         MockGauge(gauge).setTokenById(0, depositToken);
         MockGauge(gauge).setTokenById(1, depositToken);

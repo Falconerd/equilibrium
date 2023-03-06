@@ -5,7 +5,7 @@ import "../src/FixedPeriodMultiRewards.sol";
 import "../src/Token.sol";
 import "../src/MockGauge.sol";
 import "../src/RewardsDistributor.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "../src/ERC20.sol";
 import "forge-std/Test.sol";
 
 contract FixedPeriodMultiRewardsTest is Test {

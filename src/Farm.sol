@@ -3,9 +3,9 @@ pragma solidity 0.8.16;
 
 import {FixedPeriodMultiRewards} from "./FixedPeriodMultiRewards.sol";
 import {IRewardsDistributor} from "./IRewardsDistributor.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
-import {Pausable} from "openzeppelin-contracts/contracts/security/Pausable.sol";
+import {IERC20} from "./IERC20.sol";
+import {Ownable} from "./Ownable.sol";
+import {Pausable} from "./Pausable.sol";
 import "./ICore.sol";
 import "./IGauge.sol";
 import "./IOracle.sol";
@@ -43,6 +43,10 @@ contract Farm is FixedPeriodMultiRewards {
     }
 
     /* ================ MUTATIVE FUNCTIONS ================ */
+
+    function setDistributor(address token, address distributor) external onlyOwner {
+        rewardsDistributor[token] = distributor;
+    }
 
     function addAutoClaimedReward(address token) external onlyOwner {
         require(rewardsDistributor[token] != address(0), "No RewardsDistributor set up for this reward token");

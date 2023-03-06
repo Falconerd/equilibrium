@@ -2,8 +2,8 @@
 pragma solidity 0.8.16;
 
 import {IFixedPeriodMultiRewards} from "./IFixedPeriodMultiRewards.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {IERC20} from "./IERC20.sol";
+import {Ownable} from "./Ownable.sol";
 import "./IFarm.sol";
 
 contract Core is Ownable {
@@ -68,7 +68,7 @@ contract Core is Ownable {
         maxEmissionsPerEpoch = uint112(eqlMaxSupply / MIN_TOTAL_EMISSIONS_PERIOD) / EPOCH;
     }
 
-    function register(address farm, address depositToken, address distributor) public onlyOwner returns (address) {
+    function register(address farm, address depositToken) public onlyOwner returns (address) {
         // Add newly deployed farm contract.
         uint id = farms.length;
         farmIdByDepositToken[depositToken] = id;

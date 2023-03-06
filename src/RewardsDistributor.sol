@@ -2,8 +2,8 @@
 pragma solidity 0.8.16;
 
 import {IRewardsDistributor} from "./IRewardsDistributor.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
+import {IERC20} from "./IERC20.sol";
+import {Ownable} from "./Ownable.sol";
 
 contract RewardsDistributor is IRewardsDistributor, Ownable {
     mapping(address => uint) public nextAmountToDistribute;

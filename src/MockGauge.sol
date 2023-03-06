@@ -2,8 +2,8 @@
 pragma solidity 0.8.16;
 
 import "./IGauge.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import "./IERC20.sol";
+import "./Ownable.sol";
 
 // A test gauge for simulating a MasterChef contract like 
 // the MCV2 and MCV3 that SpookySwap are using.

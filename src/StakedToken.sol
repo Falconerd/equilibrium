@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.16;
 
-import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import {ERC20} from "./ERC20.sol";
 
 contract StakedToken is ERC20 {
     uint32 public constant LOCK_DURATION = 3 days;
