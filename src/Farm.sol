@@ -8,15 +8,15 @@ import {IDistributor} from "./Distributor.sol";
 import {FixedPeriodMultiRewards, IGauge} from "./FixedPeriodMultiRewards.sol";
 
 interface IOracle {
-    function consult(address token) external returns (uint);
+    function consult(address token, uint amount) external returns (uint);
 }
 
-interface IEquilibrium {
+interface ICore {
     function updateScore() external;
 }
 
 contract Farm is FixedPeriodMultiRewards {
-    address public immutable equilibrium;
+    address public immutable core;
 
     // Auto-Claimed rewards (like BOO).
     address[] public autoClaimedRewards;
@@ -32,9 +32,14 @@ contract Farm is FixedPeriodMultiRewards {
     int public accumulatedValue;
     int[] public values;
 
-    constructor(address equilibrium_, address stake_, address gauge_, uint gaugeId_)
+    constructor(address core_, address stake_, address gauge_, uint gaugeId_, address oracle_)
         FixedPeriodMultiRewards(stake_, gauge_, gaugeId_, "Symmetrix Farm", "fSMX") {
-        equilibrium = equilibrium_;
+        core = core_;
+        oracle = oracle_;
+    }
+
+    function setNextAmountToDistribute(address token, uint amount) external onlyOwner {
+        IDistributor(distributor[token]).setNextAmountToDistribute(token, amount);
     }
 
     function _beforeSupplyChange() internal override {
@@ -47,7 +52,7 @@ contract Farm is FixedPeriodMultiRewards {
     function _afterSupplyChange() internal override {
         _transferRewards();
         _updateTotalValueLocked();
-        IEquilibrium(equilibrium).updateScore();
+        ICore(core).updateScore();
     }
 
     function _transferRewards() private {
@@ -65,7 +70,7 @@ contract Farm is FixedPeriodMultiRewards {
     function _updateTotalValueLocked() private {
         uint timestamp = block.timestamp;
         if (timestamp - lastTimestamp >= PERIOD) {
-            int value = int(IOracle(oracle).consult(address(stake)));
+            int value = int(IOracle(oracle).consult(address(stake), totalSupply()));
 
             values.push(value);
             accumulatedValue += value;

@@ -3,6 +3,8 @@ pragma solidity 0.8.16;
 
 import {Ownable} from "./Ownable.sol";
 import {IERC20} from "./ERC20.sol";
+import {Farm} from "./Farm.sol";
+import {IDistributor} from "./Distributor.sol";
 
 library UQ112x112 {
     uint224 constant Q112 = 2**112;
@@ -21,13 +23,12 @@ library UQ112x112 {
 interface IFarm {
     function totalValueLocked() external returns (uint);
     function distributor(address token) external returns (address);
+    function registerRewardToken(address token, address distributor) external;
+    function startNextEpoch() external;
+    function setNextAmountToDistribute(address token, uint amount) external;
 }
 
-interface IDeployer {
-    function deploy(address stake) external returns (address);
-}
-
-contract Equilibrium is Ownable {
+contract Core is Ownable {
     using UQ112x112 for uint224;
     
     uint32 public constant PERIOD = 30 minutes;
@@ -57,31 +58,30 @@ contract Equilibrium is Ownable {
     uint112 public immutable minEmissionsPerEpoch;
     uint112 public immutable maxEmissionsPerEpoch;
 
-    address public immutable eqlToken;
-    address public immutable xEqlToken;
+    address public immutable houseToken;
+    address public immutable stakedToken;
     address public immutable admin;
-    address public immutable deployer;
 
     uint[] public epochs;
 
+    event Log(uint, uint, uint, uint);
     event FarmCreated(address indexed token, uint);
     event ActiveFarmsSet(address, address, address, address);
 
     event UpdateScore(int value, int accumulatedScore, int score, int d0, int d1, int d2, int d3);
 
-    constructor(address eqlToken_, address xEqlToken_, address deployer_, address admin_) {
-        uint eqlMaxSupply = 1_000_000_000e18;
-        eqlToken = eqlToken_;
-        xEqlToken = xEqlToken_;
-        deployer = deployer_;
+    constructor(address houseToken_, address stakedToken_, address admin_) {
+        uint houseMaxSupply = IERC20(houseToken_).totalSupply();
+        houseToken = houseToken_;
+        stakedToken = stakedToken_;
         admin = admin_;
 
-        minEmissionsPerEpoch = uint112(eqlMaxSupply / MAX_TOTAL_EMISSIONS_PERIOD) / EPOCH;
-        maxEmissionsPerEpoch = uint112(eqlMaxSupply / MIN_TOTAL_EMISSIONS_PERIOD) / EPOCH;
+        minEmissionsPerEpoch = uint112(houseMaxSupply / MAX_TOTAL_EMISSIONS_PERIOD) / EPOCH;
+        maxEmissionsPerEpoch = uint112(houseMaxSupply / MIN_TOTAL_EMISSIONS_PERIOD) / EPOCH;
     }
 
-    function deployFarm(address stake) external onlyOwner returns (address) {
-        address farm = IDeployer(deployer).deploy(stake);
+    function deployFarm(bytes32 salt, address stake, address gauge, uint gaugeId, address oracle) external onlyOwner returns (address) {
+        address farm = address(new Farm{salt: salt}(address(this), stake, gauge, gaugeId, oracle));
         uint id = farms.length;
         farmIdByDepositToken[stake] = id;
         farmIdByAddress[farm] = id;
@@ -97,31 +97,47 @@ contract Equilibrium is Ownable {
         }
     }
 
-    function newEpoch() external {
+    // Just a fowarder becaues Core owns all farms.
+    function registerRewardToken(address farm, address rewardToken, address distributor) public onlyOwner {
+        IFarm(farm).registerRewardToken(rewardToken, distributor);
+    }
+
+    function startEpoch() external {
         uint timestamp = block.timestamp;
-        require(timestamp >= epochs[epochs.length - 1] + EPOCH, "Epoch not finished");
+        require(epochs.length == 0 || timestamp >= epochs[epochs.length - 1] + EPOCH, "Epoch not finished");
 
         updateScore();
 
-        uint emissionsBonus = score > 0 ? uint(score) : uint(0);
-        uint224 emissions = minEmissionsPerEpoch + (UQ112x112.encode(maxEmissionsPerEpoch - minEmissionsPerEpoch)
-        // Magic number to get back uint precision of 18 without overflowing.
-                            .uqdiv(uint112(1e20 / emissionsBonus)) / 5192296858534827);
+        uint224 emissions = 0;
 
-        uint rewardsFarms = emissions / (1e20 / uint(SHARES_FARMS) * 1e18);
-        uint rewardsVault = emissions / (1e28 / uint(SHARES_VAULT) * 1e18);
-        uint rewardsAdmin = emissions / (1e20 / uint(SHARES_ADMIN) * 1e18);
+        if (score > 0) {
+            emissions = minEmissionsPerEpoch + (UQ112x112.encode(maxEmissionsPerEpoch - minEmissionsPerEpoch)
+            // Magic number to get back uint precision of 18 without overflowing.
+                                .uqdiv(uint112(1e20 / uint(score))) / 5192296858534827);
+        }
+
+        uint rewardsFarms = emissions / (1e20 / (uint(SHARES_FARMS) * 1e18));
+        uint rewardsVault = emissions / (1e20 / (uint(SHARES_VAULT) * 1e18));
+        uint rewardsAdmin = emissions / (1e20 / (uint(SHARES_ADMIN) * 1e18));
 
         epochs.push(timestamp);
 
         // Transfer to farm rewards distributor.
-        IERC20(eqlToken).transfer(IFarm(activeFarms[0]).distributor(eqlToken), rewardsFarms);
-        IERC20(eqlToken).transfer(IFarm(activeFarms[1]).distributor(eqlToken), rewardsFarms);
-        IERC20(eqlToken).transfer(IFarm(activeFarms[2]).distributor(eqlToken), rewardsFarms);
-        IERC20(eqlToken).transfer(IFarm(activeFarms[3]).distributor(eqlToken), rewardsFarms);
+        IERC20(houseToken).transfer(IFarm(activeFarms[0]).distributor(houseToken), rewardsFarms);
+        IERC20(houseToken).transfer(IFarm(activeFarms[1]).distributor(houseToken), rewardsFarms);
+        IERC20(houseToken).transfer(IFarm(activeFarms[2]).distributor(houseToken), rewardsFarms);
+        IERC20(houseToken).transfer(IFarm(activeFarms[3]).distributor(houseToken), rewardsFarms);
 
-        IERC20(eqlToken).transfer(xEqlToken, rewardsVault);
-        IERC20(eqlToken).transfer(admin, rewardsAdmin);
+        IERC20(houseToken).transfer(IFarm(stakedToken).distributor(houseToken), rewardsVault);
+        IERC20(houseToken).transfer(admin, rewardsAdmin);
+
+        IFarm(stakedToken).setNextAmountToDistribute(houseToken, rewardsVault);
+        IFarm(stakedToken).startNextEpoch();
+
+        for (uint i = 0; i < farms.length; ++i) {
+            IFarm(farms[i]).setNextAmountToDistribute(houseToken, rewardsFarms);
+            IFarm(farms[i]).startNextEpoch();
+        }
     }
 
     function updateScore() public {

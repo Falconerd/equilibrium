@@ -18,7 +18,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     uint public immutable gaugeId;
 
     uint public immutable contractDeployTime;
-    uint public nextPeriodTime;
+    uint public nextEpochTime;
 
     address[] public rewardTokens;
     mapping(address => bool) public isRewardToken;
@@ -33,7 +33,6 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     mapping(address => mapping(address => uint)) public userRewardPerTokenPaid;
     mapping(address => mapping(address => uint)) public rewards;
 
-    address internal _periodStarter;
     uint internal _unlocked = 1;
 
     // MODIFIERS
@@ -50,6 +49,8 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     }
 
     // INIT
+
+    event EpochStarted();
 
     constructor(address stake_, address gauge_, uint gaugeId_, string memory name_, string memory symbol_) ERC20(name_, symbol_) {
         stake = stake_;
@@ -71,7 +72,7 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
     // VIEWS
 
     function lastTimeRewardApplicable() public view returns (uint) {
-        return _min(block.timestamp, nextPeriodTime);
+        return _min(block.timestamp, nextEpochTime);
     }
     
     function rewardPerToken(address rewardsToken) public view returns (uint) {
@@ -130,23 +131,17 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
         distributor[rewardsToken] = distributor_;
     }
 
-    function setPeriodStarter(address account) external onlyOwner {
-        _periodStarter = account;
-    }
-
-    function startNextPeriod() external updateReward(address(0)) {
-        require(_msgSender() == _periodStarter);
-
+    function startNextEpoch() external onlyOwner updateReward(address(0)) {
         for (uint i = 0; i < rewardTokens.length; ++i) {
             address token = rewardTokens[i];
             uint amount = IDistributor(distributor[token]).nextAmountToDistribute(token);
 
             ERC20(token).transferFrom(distributor[token], address(this), amount);
 
-            if (block.timestamp >= nextPeriodTime) {
+            if (block.timestamp >= nextEpochTime) {
                 rewardRate[token] = amount / EPOCH;
             } else {
-                uint remainingTime = nextPeriodTime - block.timestamp;
+                uint remainingTime = nextEpochTime - block.timestamp;
                 uint remainingTokens = remainingTime * rewardRate[token];
                 rewardRate[token] = (amount + remainingTokens) / EPOCH;
             }
@@ -154,13 +149,17 @@ contract FixedPeriodMultiRewards is ERC20, Ownable, Pausable {
             lastUpdateTime[token] = block.timestamp;
         }
 
-        nextPeriodTime = block.timestamp + EPOCH;
+        nextEpochTime = block.timestamp + EPOCH;
     }
 
     function withdrawTokens(address token) external onlyOwner {
         require(!isRewardToken[token], "Cannot withdaw Reward Tokens");
         require(token != stake, "Cannot withdaw Deposit Token");
         ERC20(token).transfer(owner(), ERC20(token).balanceOf(address(this)));
+    }
+
+    function rewardTokensLength() external view returns (uint) {
+        return rewardTokens.length;
     }
 
     function _beforeSupplyChange() internal virtual {
