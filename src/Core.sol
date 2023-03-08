@@ -69,6 +69,7 @@ contract Core is Ownable {
     event ActiveFarmsSet(address, address, address, address);
 
     event UpdateScore(int value, int accumulatedScore, int score, int d0, int d1, int d2, int d3);
+    event EpochStarted(int score, uint rewardsFarms, uint rewardsVault, uint rewardsAdmin);
 
     constructor(address houseToken_, address stakedToken_, address admin_) {
         uint houseMaxSupply = IERC20(houseToken_).totalSupply();
@@ -108,19 +109,21 @@ contract Core is Ownable {
 
         updateScore();
 
-        uint224 emissions = 0;
+        uint112 emissions = minEmissionsPerEpoch;
 
         if (score > 0) {
-            emissions = minEmissionsPerEpoch + (UQ112x112.encode(maxEmissionsPerEpoch - minEmissionsPerEpoch)
+            emissions = minEmissionsPerEpoch + uint112(UQ112x112.encode(maxEmissionsPerEpoch - minEmissionsPerEpoch)
             // Magic number to get back uint precision of 18 without overflowing.
                                 .uqdiv(uint112(1e20 / uint(score))) / 5192296858534827);
         }
 
-        uint rewardsFarms = emissions / (1e20 / (uint(SHARES_FARMS) * 1e18));
-        uint rewardsVault = emissions / (1e20 / (uint(SHARES_VAULT) * 1e18));
-        uint rewardsAdmin = emissions / (1e20 / (uint(SHARES_ADMIN) * 1e18));
-
+        uint rewardsFarms = uint(UQ112x112.encode(uint112(emissions)).uqdiv(uint112(1e20 / uint(SHARES_FARMS))) / 5192296858534827);
+        uint rewardsVault = uint(UQ112x112.encode(uint112(emissions)).uqdiv(uint112(1e20 / uint(SHARES_VAULT))) / 5192296858534827);
+        uint rewardsAdmin = uint(UQ112x112.encode(uint112(emissions)).uqdiv(uint112(1e20 / uint(SHARES_ADMIN))) / 5192296858534827);
+        
         epochs.push(timestamp);
+
+        emit EpochStarted(score, rewardsFarms, rewardsVault, rewardsAdmin);
 
         // Transfer to farm rewards distributor.
         IERC20(houseToken).transfer(IFarm(activeFarms[0]).distributor(houseToken), rewardsFarms);

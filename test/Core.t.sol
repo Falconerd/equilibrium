@@ -13,7 +13,23 @@ import {Farm} from "../src/Farm.sol";
 import {FixedPeriodMultiRewards} from "../src/FixedPeriodMultiRewards.sol";
 import "forge-std/Test.sol";
 
+library UQ112x112 {
+    uint224 constant Q112 = 2**112;
+
+    // encode a uint112 as a UQ112x112
+    function encode(uint112 y) internal pure returns (uint224 z) {
+        z = uint224(y) * Q112; // never overflows
+    }
+
+    // divide a UQ112x112 by a uint112, returning a UQ112x112
+    function uqdiv(uint224 x, uint112 y) internal pure returns (uint224 z) {
+        z = x / uint224(y);
+    }
+}
+
 contract CoreTest is Test {
+    using UQ112x112 for uint224;
+
     address houseToken;
     address stakedToken;
     address core;
@@ -83,13 +99,14 @@ contract CoreTest is Test {
         Core(core).setActiveFarms([farm0, farm1, farm2, farm3]);
         Core(core).startEpoch();
         uint totalEmissionsThisEpoch =
-            IERC20(houseToken).balanceOf(distributor0) +
-            IERC20(houseToken).balanceOf(distributor1) +
-            IERC20(houseToken).balanceOf(distributor2) +
-            IERC20(houseToken).balanceOf(distributor3) +
-            IERC20(houseToken).balanceOf(distributorStaked) +
+            IERC20(houseToken).balanceOf(farm0) +
+            IERC20(houseToken).balanceOf(farm1) +
+            IERC20(houseToken).balanceOf(farm2) +
+            IERC20(houseToken).balanceOf(farm3) +
+            IERC20(houseToken).balanceOf(stakedToken) +
             IERC20(houseToken).balanceOf(admin);
-        assertEq(0, totalEmissionsThisEpoch);
+
+        assertApproxEqAbs(Core(core).minEmissionsPerEpoch(), totalEmissionsThisEpoch, 1e8);
 
         // Test usage
 
@@ -97,123 +114,113 @@ contract CoreTest is Test {
         MockPair(fakeLP1).mint(100_000e18);
         MockPair(fakeLP2).mint(100_000e18);
         MockPair(fakeLP3).mint(100_000e18);
-
+        
         IERC20(fakeLP0).approve(farm0, 100_000e18);
         IERC20(fakeLP1).approve(farm1, 100_000e18);
         IERC20(fakeLP2).approve(farm2, 100_000e18);
         IERC20(fakeLP3).approve(farm3, 100_000e18);
-
+        
         int scoreBefore = Core(core).score();
         Farm(farm0).deposit(99e18); // 99
         vm.warp(block.timestamp + 30 minutes);
         Farm(farm1).deposit(100e18);
         Farm(farm0).deposit(1e18); // 100
-
+        
         assertEq(100e18, Farm(farm0).totalValueLocked());
-
+        
         int scoreNow = Core(core).score();
         assertGt(scoreBefore, scoreNow); // Goes from 0 to -50
-
+        
         scoreBefore = scoreNow;
         vm.warp(block.timestamp + 30 minutes);
         Farm(farm2).deposit(100e18);
         scoreNow = Core(core).score();
         assertGt(scoreNow, scoreBefore);
-
+        
         scoreBefore = scoreNow;
         vm.warp(block.timestamp + 30 minutes);
         Farm(farm3).deposit(100e18);
         scoreNow = Core(core).score();
         assertGt(scoreNow, scoreBefore);
-
+        
         vm.warp(block.timestamp + 30 minutes);
         Farm(farm0).withdraw(1e18); // 99
         scoreNow = Core(core).score();
         assertGt(scoreNow, scoreBefore);
-
+        
         vm.warp(block.timestamp + 30 minutes);
         Farm(farm1).withdraw(1e18);
         scoreNow = Core(core).score();
         assertGt(scoreNow, scoreBefore);
-
+        
         vm.warp(block.timestamp + 30 minutes);
         Farm(farm2).withdraw(1e18);
         scoreNow = Core(core).score();
         Farm(farm2).deposit(1e18);
         assertGt(scoreNow, scoreBefore);
-
+        
         vm.warp(block.timestamp + 30 minutes);
         Farm(farm3).withdraw(1e18);
         scoreNow = Core(core).score();
         assertGt(scoreNow, scoreBefore);
-
+        
         vm.warp(block.timestamp + 30 minutes);
-
+        
         Farm(farm0).withdraw(1e17); // 98.9
-
+        
         vm.warp(block.timestamp + 30 minutes);
-
+        
         Farm(farm0).withdraw(1e17); // 98.8
-
+        
         vm.warp(block.timestamp + 30 minutes);
-
+        
         Farm(farm0).withdraw(1e17); // 98.7
-
+        
         // TVL is time weighted, so should be roughly 987e17
         assertApproxEqAbs(987e17, Farm(farm0).totalValueLocked(), 1e18);
-
+        
         vm.warp(block.timestamp + 2 * 30 minutes);
-
+        
         // Make sure the rewards are in range.
         Core(core).startEpoch();
-
-        assertGt(Farm(farm0).rewardRate(houseToken) * 6 hours, Core(core).minEmissionsPerEpoch() / (1e20 / (uint(Core(core).SHARES_FARMS()) * 1e18)));
-        assertLt(Farm(farm0).rewardRate(houseToken) * 6 hours, Core(core).maxEmissionsPerEpoch() / (1e20 / (uint(Core(core).SHARES_FARMS()) * 1e18)));
+        
+        assertGt(Farm(farm0).rewardRate(houseToken) * 6 hours, uint(UQ112x112.encode(uint112(Core(core).minEmissionsPerEpoch())).uqdiv(uint112(1e20 / uint(Core(core).SHARES_FARMS()))) / 5192296858534827));
+        assertLt(Farm(farm0).rewardRate(houseToken) * 6 hours, uint(UQ112x112.encode(uint112(Core(core).maxEmissionsPerEpoch())).uqdiv(uint112(1e20 / uint(Core(core).SHARES_FARMS()))) / 5192296858534827));
 
         Farm(farm0).getReward();
-        assertEq(0, IERC20(houseToken).balanceOf(address(this)));
+        uint user1Earned0 = IERC20(houseToken).balanceOf(address(this));
+        assertApproxEqAbs(uint(UQ112x112.encode(uint112(Core(core).minEmissionsPerEpoch())).uqdiv(uint112(1e20 / uint(Core(core).SHARES_FARMS()))) / 5192296858534827), IERC20(houseToken).balanceOf(address(this)), 1e8);
 
         // User 2 should receive half as many rewards
         startHoax(address(69420));
-
-        MockPair(fakeLP0).mint(100_000e18);
-        MockPair(fakeLP1).mint(100_000e18);
+        
         MockPair(fakeLP2).mint(100_000e18);
-        MockPair(fakeLP3).mint(100_000e18);
-
-        IERC20(fakeLP0).approve(farm0, 100_000e18);
-        IERC20(fakeLP1).approve(farm1, 100_000e18);
         IERC20(fakeLP2).approve(farm2, 100_000e18);
-        IERC20(fakeLP3).approve(farm3, 100_000e18);
-
-        Farm(farm0).deposit(50e18);
-        Farm(farm1).deposit(50e18);
         Farm(farm2).deposit(50e18);
-        Farm(farm3).deposit(50e18);
-
+        
         vm.warp(block.timestamp + 3 hours);
-
+        
         uint user1Earned = Farm(farm2).earned(address(this), houseToken);
         uint user2Earned = Farm(farm2).earned(address(69420), houseToken);
-
+        
         assertEq(user1Earned, 2 * user2Earned);
-
+        
         vm.stopPrank();
-
+        
         Farm(farm2).getReward();
-        assertEq(user1Earned, IERC20(houseToken).balanceOf(address(this)));
-
+        assertEq(user1Earned + user1Earned0, IERC20(houseToken).balanceOf(address(this)));
+        
         // Test StakedToken.
-        uint minEmissionsPerEpochStaked = Core(core).minEmissionsPerEpoch() / (1e20 / (uint(Core(core).SHARES_VAULT()) * 1e18));
-        uint maxEmissionsPerEpochStaked = Core(core).maxEmissionsPerEpoch() / (1e20 / (uint(Core(core).SHARES_VAULT()) * 1e18));
+        uint minEmissionsPerEpochStaked = uint(UQ112x112.encode(uint112(Core(core).minEmissionsPerEpoch())).uqdiv(uint112(1e20 / uint(Core(core).SHARES_VAULT()))) / 5192296858534827);
+        uint maxEmissionsPerEpochStaked = uint(UQ112x112.encode(uint112(Core(core).maxEmissionsPerEpoch())).uqdiv(uint112(1e20 / uint(Core(core).SHARES_VAULT()))) / 5192296858534827);
         assertGt(StakedToken(stakedToken).rewardRate(houseToken) * 6 hours, minEmissionsPerEpochStaked);
         assertLt(StakedToken(stakedToken).rewardRate(houseToken) * 6 hours, maxEmissionsPerEpochStaked);
-
+        
         IERC20(houseToken).approve(stakedToken, 1e12);
         StakedToken(stakedToken).deposit(1e12);
-
+        
         vm.warp(block.timestamp + 3 hours);
-
+        
         assertGt(StakedToken(stakedToken).earned(address(this), houseToken), minEmissionsPerEpochStaked);
         assertLt(StakedToken(stakedToken).earned(address(this), houseToken), maxEmissionsPerEpochStaked);
     }
