@@ -28,10 +28,10 @@ contract Deploy is Script {
         address oracle = address(new MockOracle());
 
         bytes32 salt = 0xdd2FB1EE6f83F3f072a6489f4A6DBaFa92FB1EE6f83F3f072a6489f4A6DBaFa9;
-        address farm0 = Core(core).deployFarm(salt, fakeLP0, address(0), 0, oracle);
-        address farm1 = Core(core).deployFarm(salt, fakeLP1, address(0), 0, oracle);
-        address farm2 = Core(core).deployFarm(salt, fakeLP2, address(0), 0, oracle);
-        address farm3 = Core(core).deployFarm(salt, fakeLP3, address(0), 0, oracle);
+        Core(core).deployFarm(salt, fakeLP0, address(0), 0, oracle);
+        Core(core).deployFarm(salt, fakeLP1, address(0), 0, oracle);
+        Core(core).deployFarm(salt, fakeLP2, address(0), 0, oracle);
+        Core(core).deployFarm(salt, fakeLP3, address(0), 0, oracle);
 
         vm.stopBroadcast();
     }
