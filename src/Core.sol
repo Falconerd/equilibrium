@@ -117,9 +117,9 @@ contract Core is Ownable {
                                 .uqdiv(uint112(1e20 / uint(score))) / 5192296858534827);
         }
 
-        uint rewardsFarms = uint(UQ112x112.encode(uint112(emissions)).uqdiv(uint112(1e20 / uint(SHARES_FARMS))) / 5192296858534827);
-        uint rewardsVault = uint(UQ112x112.encode(uint112(emissions)).uqdiv(uint112(1e20 / uint(SHARES_VAULT))) / 5192296858534827);
-        uint rewardsAdmin = uint(UQ112x112.encode(uint112(emissions)).uqdiv(uint112(1e20 / uint(SHARES_ADMIN))) / 5192296858534827);
+        uint rewardsFarms = emissions * 1e18 / (1e20 / uint(SHARES_FARMS));
+        uint rewardsVault = emissions * 1e18 / (1e20 / uint(SHARES_VAULT));
+        uint rewardsAdmin = emissions * 1e18 / (1e20 / uint(SHARES_ADMIN));
         
         epochs.push(timestamp);
 
