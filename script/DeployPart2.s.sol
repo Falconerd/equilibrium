@@ -16,13 +16,13 @@ import {FixedPeriodMultiRewards} from "../src/FixedPeriodMultiRewards.sol";
 
 contract Deploy is Script {
     function run() external {
-        address core = address(0x3e78D6D84D168AF4015Db54BD78Afb5FDf406723);
-        address houseToken = address(0x7C52F587013Ed658e3A3Ebf1c3D02965A3c4F9cF);
-        address stakedToken = address(0x387e19448924Bca0e3730bd41839a8113d8c9668);
-        address farm0 = address(0xabb42729E07f578000D438ACa89BB881dAcE778E);
-        address farm1 = address(0xFe0FdB358878691a4c8bE3E7FDD2dA83f7d4Fd71);
-        address farm2 = address(0xb5CfC2Fa285f450C138a011523a1e9B5fBbFC2A7);
-        address farm3 = address(0x2cb834140c4b3bd388632731E47d1Ed62a22740a);
+        address core = address(0xE9D4fb18527f008d135d26808f07Ae22DCac777E);
+        address houseToken = address(0xB1f93Ea63E463e0796264a529732E89683ab9810);
+        address stakedToken = address(0x2905362B80CAc5c69eEea9e671e77972A710CfCC);
+        address farm0 = address(0x759e8A13C68c1E4885d08328BeC19dE320b4E615);
+        address farm1 = address(0xC8985E245D3e701539CCDd2bd77E4376b6200f30);
+        address farm2 = address(0x0e1d90C374281789010fB6e9E2f7B974f69FA0E2);
+        address farm3 = address(0x7BdCa39C40a418c510F8380Bb91714e4A616ac60);
 
         uint deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
